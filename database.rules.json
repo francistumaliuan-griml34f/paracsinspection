@@ -4,9 +4,10 @@
       ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && ((auth.uid === $uid && !data.exists()) || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))",
+        ".write": "auth != null && ((auth.uid === $uid && (!data.exists() || !newData.exists())) || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))",
         ".validate": "newData.hasChildren(['fullName', 'studentNumber', 'role', 'requestedRole'])",
         "fullName": {
+          ".write": "auth != null && auth.uid === $uid",
           ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 100"
         },
         "studentNumber": {
@@ -39,6 +40,39 @@
         "$pid": {
           ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || (root.child('users').child(auth.uid).child('role').val() === 'committee' && !data.exists() && newData.child('by').val() === auth.uid && newData.child('status').val() === 'pending'))",
           ".validate": "newData.hasChildren(['json', 'by', 'byName', 'status', 'createdAt'])"
+        }
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && !newData.exists()",
+        "$nid": {
+          ".write": "auth != null && ((auth.uid === $uid && data.exists()) || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))",
+          ".validate": "newData.hasChildren(['title', 'body', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length <= 120 && newData.child('body').isString() && newData.child('body').val().length <= 500"
+        }
+      }
+    },
+    "announcements": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+      "$id": {
+        ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || (root.child('users').child(auth.uid).child('role').val() === 'committee' && ((!data.exists() && newData.child('by').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('by').val() === auth.uid))))",
+        ".validate": "newData.hasChildren(['title', 'body', 'by', 'byName', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length <= 120 && newData.child('body').isString() && newData.child('body').val().length <= 2000"
+      }
+    },
+    "policies": {
+      "meta": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+        "$id": {
+          ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || (root.child('users').child(auth.uid).child('role').val() === 'committee' && ((!data.exists() && newData.child('by').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('by').val() === auth.uid))))",
+          ".validate": "newData.hasChildren(['title', 'fileName', 'size', 'by', 'byName', 'createdAt']) && newData.child('size').isNumber() && newData.child('size').val() <= 3145728"
+        }
+      },
+      "files": {
+        "$id": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || (root.child('users').child(auth.uid).child('role').val() === 'committee' && (!data.exists() || (!newData.exists() && root.child('policies').child('meta').child($id).child('by').val() === auth.uid))))",
+          ".validate": "newData.hasChildren(['data']) && newData.child('data').isString() && newData.child('data').val().length <= 4300000"
         }
       }
     }

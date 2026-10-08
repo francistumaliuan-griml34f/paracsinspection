@@ -2,6 +2,7 @@
 <html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="logo.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PLMar Criminology Inspection Schedule Dashboard</title>
     <!-- Tailwind CSS -->
@@ -36,6 +37,7 @@
         <div class="min-h-full flex items-center justify-center p-4">
             <div class="w-full max-w-md">
                 <div class="text-center mb-5">
+                    <img src="logo.png" alt="P.A.R.A.C.S logo" class="h-28 w-28 object-contain mx-auto mb-3 drop-shadow-2xl" onerror="this.style.display='none'">
                     <p class="text-[11px] font-black tracking-wider text-[#FFD700] uppercase">Pamantasan ng Lungsod ng Marikina</p>
                     <h1 class="text-lg font-extrabold text-white uppercase">College of Criminology</h1>
                     <p class="text-xs text-purple-200 font-semibold">Inspection Schedule Dashboard</p>
@@ -120,6 +122,7 @@
             
             <!-- Left Branding Header -->
             <div class="flex items-center space-x-3 text-center lg:text-left">
+                <img src="logo.png" alt="P.A.R.A.C.S logo" class="h-12 w-12 sm:h-14 sm:w-14 object-contain shrink-0 drop-shadow-lg" onerror="this.style.display='none'">
                 <div>
                     <h1 class="text-xs sm:text-sm font-black tracking-wider text-[#FFD700] uppercase">PAMANTASAN NG LUNGSOD NG MARIKINA</h1>
                     <h2 class="text-sm sm:text-base font-extrabold tracking-tight text-white uppercase">COLLEGE OF CRIMINOLOGY</h2>
@@ -165,14 +168,20 @@
                     </div>
                 </div>
 
-                <!-- Signed-in user -->
-                <div id="userChip" class="hidden flex items-center space-x-2 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-700/50">
+                <!-- Signed-in user (opens the account sidebar) -->
+                <button id="userChip" onclick="openAccount('account')" class="hidden flex items-center space-x-2 bg-purple-950/60 hover:bg-purple-900/70 px-3 py-1.5 rounded-lg border border-purple-700/50 transition text-left" title="My account">
                     <svg class="shrink-0 text-amber-300" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <div class="leading-tight text-left">
                         <div id="userName" class="text-[11px] font-bold text-white max-w-[150px] truncate"></div>
                         <div id="userRole" class="text-[10px] font-semibold text-amber-300"></div>
                     </div>
-                </div>
+                </button>
+
+                <!-- Notifications -->
+                <button id="bellBtn" onclick="openAccount('alerts')" class="hidden relative flex items-center bg-purple-900/80 hover:bg-purple-800 text-amber-300 px-3 py-1.5 rounded-lg border border-purple-700/50 text-xs font-bold transition" title="Notifications">
+                    <svg class="shrink-0" width="1.1em" height="1.1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span id="bellBadge" class="hidden ml-1.5 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span>
+                </button>
 
                 <!-- Approvals (officers/executives) or My Changes (committee) -->
                 <button id="approvalsBtn" onclick="openApprovals()" class="hidden flex items-center bg-purple-900/80 hover:bg-purple-800 text-amber-300 px-3 py-1.5 rounded-lg border border-purple-700/50 text-xs font-bold transition">
@@ -717,6 +726,7 @@
 
             window.renderUI();
             updateApprovalsUI();
+            refreshAccountUI();
         }
 
         // ---- Approvals panel ----
@@ -926,6 +936,362 @@
             });
         }
 
+        // ================= ACCOUNT SIDEBAR: details, security, alerts, files =================
+        window.announcements = {};     // id -> announcement
+        window.myNotifications = {};   // id -> personal notification
+        window.policies = {};          // id -> policy/document info
+
+        const MAX_POLICY_BYTES = 3 * 1024 * 1024;
+        const POLICY_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'png', 'jpg', 'jpeg'];
+        const ACC_TABS = ['account', 'security', 'alerts', 'files'];
+        let accountTab = 'account';
+
+        function fmtBytes(n) {
+            n = Number(n) || 0;
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+            return (n / 1024 / 1024).toFixed(1) + ' MB';
+        }
+        function fmtDate(ts) { return ts ? new Date(ts).toLocaleString() : ''; }
+        function myUid() { return window.currentUser ? window.currentUser.uid : ''; }
+        function accountOpen() { return !document.getElementById('accountDrawer').classList.contains('hidden'); }
+        function setBtnBusy(btn, busy, busyText) {
+            if (busy) { btn.dataset.label = btn.textContent; btn.textContent = busyText; }
+            else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
+            btn.disabled = busy;
+            btn.classList.toggle('opacity-60', busy);
+        }
+        function showInline(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg || '';
+            el.classList.toggle('hidden', !msg);
+        }
+        function wrongPassword(err) {
+            const c = err && err.code;
+            return c === 'auth/wrong-password' || c === 'auth/invalid-credential';
+        }
+
+        // ---- open / close / tabs ----
+        function openAccount(tab) {
+            document.getElementById('accountOverlay').classList.remove('hidden');
+            document.getElementById('accountDrawer').classList.remove('hidden');
+            setAccountTab(tab || 'account');
+        }
+        function closeAccount() {
+            if (accountOpen() && accountTab === 'alerts') markAlertsSeen();
+            document.getElementById('accountOverlay').classList.add('hidden');
+            document.getElementById('accountDrawer').classList.add('hidden');
+        }
+        function setAccountTab(tab) {
+            if (accountOpen() && accountTab === 'alerts' && tab !== 'alerts') markAlertsSeen();
+            accountTab = tab;
+            ACC_TABS.forEach(t => {
+                document.getElementById('accPanel-' + t).classList.toggle('hidden', t !== tab);
+                document.getElementById('accTab-' + t).className =
+                    'flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide transition ' +
+                    (t === tab ? 'text-[#2E1A47] dark:text-[#FFD700] border-b-2 border-[#FFD700] bg-white dark:bg-slate-800'
+                               : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white');
+            });
+            if (tab === 'account') fillAccountForm(true);
+            if (tab === 'alerts') renderAlerts();
+            if (tab === 'files') renderFiles();
+        }
+
+        // ---- Account tab ----
+        function fillAccountForm(force) {
+            const u = window.currentUser;
+            if (!u) return;
+            document.getElementById('accAvatar').textContent = (u.fullName || '?').trim().charAt(0).toUpperCase();
+            document.getElementById('accName').textContent = u.fullName;
+            document.getElementById('accRole').textContent = ROLE_LABELS[u.role] || u.role;
+            document.getElementById('accSN').value = u.studentNumber || '';
+            const input = document.getElementById('accNameInput');
+            if (force || document.activeElement !== input) input.value = u.fullName;
+            const pending = document.getElementById('accPending');
+            const waiting = u.requestedRole && u.requestedRole !== u.role;
+            pending.textContent = waiting ? `Your request for ${ROLE_LABELS[u.requestedRole] || u.requestedRole} access is waiting for approval.` : '';
+            pending.classList.toggle('hidden', !waiting);
+        }
+
+        async function saveProfile(e) {
+            e.preventDefault();
+            if (!window.cloudApi) { showToast('Not connected yet. Please try again.', 'error'); return; }
+            const name = document.getElementById('accNameInput').value.trim().replace(/\s+/g, ' ');
+            if (name.length < 5 || !name.includes(' ')) { showToast('Enter your full name (first and last name).', 'error'); return; }
+            if (name === window.currentUser.fullName) { showToast('No changes to save.'); return; }
+            const btn = document.getElementById('profileSaveBtn');
+            setBtnBusy(btn, true, 'Saving...');
+            try {
+                await window.cloudApi.updateName(name);
+                showToast('Your details were updated.', 'success');
+            } catch (err) {
+                showToast('Could not update your details. Please try again.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        // ---- Security tab ----
+        async function submitPasswordChange(e) {
+            e.preventDefault();
+            showInline('pwError', '');
+            if (!window.cloudApi) { showInline('pwError', 'Not connected yet. Please try again.'); return; }
+            const cur = document.getElementById('pwCurrent').value;
+            const nw = document.getElementById('pwNew').value;
+            const nw2 = document.getElementById('pwNew2').value;
+            if (!cur) { showInline('pwError', 'Enter your current password.'); return; }
+            if (nw.length < 8) { showInline('pwError', 'Your new password must be at least 8 characters.'); return; }
+            if (nw !== nw2) { showInline('pwError', 'The two new passwords do not match.'); return; }
+            if (nw === cur) { showInline('pwError', 'Your new password must be different from the current one.'); return; }
+            const btn = document.getElementById('pwSaveBtn');
+            setBtnBusy(btn, true, 'Updating...');
+            try {
+                await window.cloudApi.changePassword(cur, nw);
+                document.getElementById('passwordForm').reset();
+                showToast('Password updated.', 'success');
+            } catch (err) {
+                showInline('pwError', wrongPassword(err) ? 'Your current password is incorrect.' : window.authApi.friendlyError(err));
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        // ---- Alerts tab (notifications + special announcements) ----
+        function annList() {
+            return Object.entries(window.announcements || {}).map(([id, a]) => ({ id, ...a }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+        function notifList() {
+            return Object.entries(window.myNotifications || {}).map(([id, n]) => ({ id, ...n }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+        function annSeenKey() { return 'annSeen_' + myUid(); }
+        function getAnnSeen() { try { return Number(localStorage.getItem(annSeenKey()) || 0); } catch (e) { return 0; } }
+        function setAnnSeen(ts) { try { localStorage.setItem(annSeenKey(), String(ts)); } catch (e) { /* ignore */ } }
+
+        function unreadCount() {
+            const seen = getAnnSeen();
+            const a = annList().filter(x => (x.createdAt || 0) > seen && x.by !== myUid()).length;
+            const n = notifList().filter(x => x.read !== true).length;
+            return a + n;
+        }
+
+        function updateAlertsUI() {
+            if (!window.currentUser) return;
+            const n = unreadCount();
+            ['bellBadge', 'tabAlertsBadge'].forEach(id => {
+                const b = document.getElementById(id);
+                b.textContent = n;
+                b.classList.toggle('hidden', n === 0);
+            });
+            if (accountOpen() && accountTab === 'alerts') renderAlerts();
+        }
+
+        function markAlertsSeen() {
+            const latest = annList().reduce((m, a) => Math.max(m, a.createdAt || 0), 0);
+            if (latest > getAnnSeen()) setAnnSeen(latest);
+            const unread = notifList().filter(n => n.read !== true).map(n => n.id);
+            if (unread.length && window.cloudApi) window.cloudApi.markRead(unread).catch(() => {});
+            updateAlertsUI();
+        }
+        function markAllRead() { markAlertsSeen(); }
+
+        function renderAlerts() {
+            const seen = getAnnSeen();
+            const newPill = '<span class="ml-2 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black uppercase">New</span>';
+
+            // officers/executives: shortcut to what is waiting for them
+            const card = document.getElementById('adminAlertCard');
+            let waiting = 0;
+            if (isAdminRole()) {
+                waiting = proposalList().filter(p => p.status === 'pending').length + pendingRoleRequests().length;
+            }
+            card.innerHTML = waiting
+                ? `<button type="button" onclick="closeAccount(); openApprovals();" class="w-full text-left rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 px-4 py-3 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-950/50 transition">
+                       ${waiting} request${waiting > 1 ? 's' : ''} waiting for your approval. Tap to open Approvals.
+                   </button>`
+                : '';
+
+            const notes = notifList();
+            document.getElementById('notifList').innerHTML = notes.length === 0
+                ? '<p class="text-xs text-slate-400 italic">No notifications yet.</p>'
+                : notes.map(n => `
+                    <div class="rounded-lg border p-3 ${n.read !== true ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900'}">
+                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100">${esc(n.title)}${n.read !== true ? newPill : ''}</div>
+                        <div class="text-xs text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line break-words">${esc(n.body)}</div>
+                        <div class="text-[10px] text-slate-400 mt-1">${esc(fmtDate(n.createdAt))}</div>
+                    </div>`).join('');
+
+            const anns = annList();
+            document.getElementById('annList').innerHTML = anns.length === 0
+                ? '<p class="text-xs text-slate-400 italic">No announcements yet.</p>'
+                : anns.map(a => {
+                    const canDelete = isAdminRole() || (isCommitteeRole() && a.by === myUid());
+                    return `
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(a.title)}${(a.createdAt || 0) > seen && a.by !== myUid() ? newPill : ''}</div>
+                            ${canDelete ? `<button type="button" onclick="deleteAnnouncement('${esc(a.id)}')" class="shrink-0 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline">Delete</button>` : ''}
+                        </div>
+                        <div class="text-xs text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line break-words">${esc(a.body)}</div>
+                        <div class="text-[10px] text-slate-400 mt-2">Posted by ${esc(a.byName)} (${esc(ROLE_LABELS[a.byRole] || a.byRole || '')}) · ${esc(fmtDate(a.createdAt))}</div>
+                    </div>`;
+                }).join('');
+        }
+
+        async function postAnnouncement(e) {
+            e.preventDefault();
+            if (!canModify() || !window.cloudApi) return;
+            const title = document.getElementById('annTitle').value.trim();
+            const body = document.getElementById('annBody').value.trim();
+            if (!title || !body) { showToast('Add a title and a message.', 'error'); return; }
+            const btn = document.getElementById('annPostBtn');
+            setBtnBusy(btn, true, 'Posting...');
+            try {
+                await window.cloudApi.postAnnouncement({ title, body });
+                document.getElementById('annComposer').reset();
+                showToast('Announcement posted.', 'success');
+            } catch (err) {
+                showToast('Could not post the announcement. Please try again.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        function deleteAnnouncement(id) {
+            const a = (window.announcements || {})[id];
+            askConfirm({
+                title: 'Delete Announcement',
+                message: `Are you sure you want to delete this announcement${a ? ` "${a.title}"` : ''}? This cannot be undone.`,
+                confirmText: 'Yes, Delete',
+                onConfirm: () => window.cloudApi.deleteAnnouncement(id).then(
+                    () => showToast('Announcement deleted.', 'success'),
+                    () => showToast('Could not delete the announcement.', 'error'))
+            });
+        }
+
+        // ---- Files tab (policies / documents everyone can download) ----
+        function renderFiles() {
+            const el = document.getElementById('filesList');
+            if (!el) return;
+            const list = Object.entries(window.policies || {}).map(([id, p]) => ({ id, ...p }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            el.innerHTML = list.length === 0
+                ? '<p class="text-xs text-slate-400 italic">No documents have been uploaded yet.</p>'
+                : list.map(p => {
+                    const canDelete = isAdminRole() || (isCommitteeRole() && p.by === myUid());
+                    return `
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(p.title)}</div>
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400 break-all">${esc(p.fileName)} · ${esc(fmtBytes(p.size))}</div>
+                        <div class="text-[10px] text-slate-400 mt-1">Uploaded by ${esc(p.byName)} (${esc(ROLE_LABELS[p.byRole] || p.byRole || '')}) · ${esc(fmtDate(p.createdAt))}</div>
+                        <div class="flex gap-2 mt-2">
+                            <button type="button" onclick="downloadPolicy('${esc(p.id)}')" class="px-3 py-1.5 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] rounded-lg text-[11px] font-bold">Download</button>
+                            ${canDelete ? `<button type="button" onclick="deletePolicy('${esc(p.id)}')" class="px-3 py-1.5 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white rounded-lg text-[11px] font-bold transition">Delete</button>` : ''}
+                        </div>
+                    </div>`;
+                }).join('');
+        }
+
+        async function submitUpload(e) {
+            e.preventDefault();
+            if (!canModify() || !window.cloudApi) return;
+            const input = document.getElementById('uploadFile');
+            const file = input.files && input.files[0];
+            if (!file) { showToast('Choose a file first.', 'error'); return; }
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (!POLICY_EXTS.includes(ext)) { showToast('That file type is not allowed. Use PDF, Word, Excel, PowerPoint, text or an image.', 'error'); return; }
+            if (file.size === 0) { showToast('That file is empty.', 'error'); return; }
+            if (file.size > MAX_POLICY_BYTES) { showToast(`That file is ${fmtBytes(file.size)}. The limit is 3 MB.`, 'error'); return; }
+            const title = document.getElementById('uploadTitle').value.trim() || file.name;
+            const btn = document.getElementById('uploadBtn');
+            setBtnBusy(btn, true, 'Uploading...');
+            try {
+                await window.cloudApi.uploadPolicy({ title, file });
+                document.getElementById('uploadForm').reset();
+                showToast('Document uploaded.', 'success');
+            } catch (err) {
+                showToast('Could not upload the document. Please try again.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        async function downloadPolicy(id) {
+            if (!window.cloudApi) return;
+            showToast('Preparing your download...');
+            try {
+                await window.cloudApi.downloadPolicy(id);
+            } catch (err) {
+                showToast('Could not download that file. It may have been removed.', 'error');
+            }
+        }
+
+        function deletePolicy(id) {
+            const p = (window.policies || {})[id];
+            askConfirm({
+                title: 'Delete Document',
+                message: `Are you sure you want to delete${p ? ` "${p.title}"` : ' this document'}? Everyone will lose access to it.`,
+                confirmText: 'Yes, Delete',
+                onConfirm: () => window.cloudApi.deletePolicy(id).then(
+                    () => showToast('Document deleted.', 'success'),
+                    () => showToast('Could not delete the document.', 'error'))
+            });
+        }
+
+        // ---- Delete my account ----
+        function openDeleteAccount() {
+            if (isAdminRole()) {
+                const me = myUid();
+                const others = Object.entries(window.allUsers || {})
+                    .filter(([id, u]) => id !== me && u && (u.role === 'executive' || u.role === 'officer'));
+                if (others.length === 0) {
+                    showToast('You are the only officer/executive. Give another person that role before deleting your account.', 'error');
+                    return;
+                }
+            }
+            document.getElementById('deletePw').value = '';
+            showInline('deleteError', '');
+            document.getElementById('deleteAccountModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('deletePw').focus(), 50);
+        }
+        function closeDeleteAccount() {
+            document.getElementById('deleteAccountModal').classList.add('hidden');
+            document.getElementById('deletePw').value = '';
+        }
+
+        async function confirmDeleteAccount(e) {
+            e.preventDefault();
+            if (!window.cloudApi) return;
+            const pw = document.getElementById('deletePw').value;
+            if (!pw) { showInline('deleteError', 'Enter your password to confirm.'); return; }
+            const btn = document.getElementById('deleteConfirmBtn');
+            setBtnBusy(btn, true, 'Deleting...');
+            showInline('deleteError', '');
+            try {
+                await window.cloudApi.deleteAccount(pw);
+                closeDeleteAccount();
+                closeAccount();
+            } catch (err) {
+                showInline('deleteError', wrongPassword(err) ? 'That password is incorrect.' : window.authApi.friendlyError(err));
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        // Called whenever the signed-in profile or role changes
+        function refreshAccountUI() {
+            const u = window.currentUser;
+            if (!u) return;
+            document.getElementById('bellBtn').classList.remove('hidden');
+            const modify = canModify();
+            document.getElementById('annComposer').classList.toggle('hidden', !modify);
+            document.getElementById('uploadForm').classList.toggle('hidden', !modify);
+            if (accountOpen() && accountTab === 'account') fillAccountForm(false);
+            updateAlertsUI();
+            renderFiles();
+        }
+
         // ---- Login / sign-up forms ----
         function normalizeStudentNumber(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
         function validStudentNumber(sn) { return /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(sn) && sn.length >= 5 && sn.length <= 30; }
@@ -1006,8 +1372,8 @@
     <!-- FIREBASE: LOGIN (Authentication) + LIVE SYNC (Realtime Database) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getDatabase, ref, onValue, set, update, push as dbPush, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getDatabase, ref, onValue, set, update, push as dbPush, serverTimestamp, remove, get, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
         // ============================================================
         // FIREBASE CONFIG
@@ -1043,6 +1409,8 @@
         let baseUnsubs = [];
         let roleUnsubs = [];
         let activeRole = null;
+        let deletingAccount = false;
+        let commonStarted = false;
 
         function friendlyError(err) {
             const code = (err && err.code) || '';
@@ -1054,6 +1422,7 @@
                 'auth/email-already-in-use': 'This student number is already registered. Please log in instead.',
                 'auth/weak-password': 'Your password is too weak. Use at least 8 characters.',
                 'auth/network-request-failed': 'No internet connection. Please try again.',
+                'auth/requires-recent-login': 'For safety, please log out and log in again, then try once more.',
                 'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
                 'auth/operation-not-allowed': 'Sign-in is not turned on yet. In Firebase, enable Authentication > Sign-in method > Email/Password.',
                 'auth/configuration-not-found': 'Sign-in is not turned on yet. In Firebase, open Authentication and click Get started, then enable Email/Password.',
@@ -1106,7 +1475,7 @@
             profileUnsub = onValue(ref(db, 'users/' + user.uid), (snap) => {
                 const p = snap.val();
                 if (!p) {
-                    if (signingUp) return;
+                    if (signingUp || deletingAccount) return;
                     failSignIn('Your account is incomplete. Ask an officer to remove it, then sign up again.');
                     return;
                 }
@@ -1114,6 +1483,7 @@
                 setAuthVisible(false);
                 applyRoleUI();
                 startRoom();
+                startCommon();
                 startRoleListeners(p.role);
             }, (err) => {
                 console.warn('Profile error:', err);
@@ -1126,7 +1496,9 @@
             baseUnsubs.forEach(u => u()); baseUnsubs = [];
             roleUnsubs.forEach(u => u()); roleUnsubs = [];
             roomRef = null; activeRole = null; enteredUid = null;
+            commonStarted = false; deletingAccount = false;
             window.currentUser = null; window.allUsers = {}; window.proposals = {};
+            window.announcements = {}; window.myNotifications = {}; window.policies = {};
         }
 
         function failSignIn(message) {
@@ -1239,23 +1611,185 @@
             }));
         };
 
-        window.cloudReviewProposal = (pid, status) => {
+        // Tell a person (via their notifications list) what happened to their request
+        async function notify(uid, title, body) {
+            try {
+                await set(dbPush(ref(db, `notifications/${uid}`)), {
+                    title: String(title).slice(0, 120),
+                    body: String(body).slice(0, 450),
+                    createdAt: serverTimestamp(),
+                    read: false
+                });
+            } catch (err) {
+                console.warn('Could not send notification:', err);
+            }
+        }
+
+        window.cloudReviewProposal = async (pid, status) => {
             const cu = window.currentUser;
-            return update(ref(db, `proposals/${room()}/${pid}`), {
+            const p = (window.proposals || {})[pid];
+            await update(ref(db, `proposals/${room()}/${pid}`), {
                 status,
                 reviewedBy: cu.uid,
                 reviewedByName: cu.fullName,
                 reviewedAt: serverTimestamp()
             });
+            if (p && p.by) {
+                let what = 'Your schedule change';
+                try {
+                    const ch = JSON.parse(p.json);
+                    what = `${CHANGE_LABEL[ch.type] || ch.type}: ${String(changeDetail(ch)).split('\n')[0]}`;
+                } catch (e) { /* keep the generic text */ }
+                await notify(p.by,
+                    status === 'approved' ? 'Change approved' : 'Change not approved',
+                    `${what}\nReviewed by ${cu.fullName}.`);
+            }
         };
 
-        window.cloudReviewUser = (uid, approve) => {
+        window.cloudReviewUser = async (uid, approve) => {
             const u = (window.allUsers || {})[uid];
-            if (!u) return Promise.reject(new Error('Unknown account'));
-            return update(ref(db, 'users/' + uid), approve ? { role: u.requestedRole } : { requestedRole: u.role });
+            if (!u) throw new Error('Unknown account');
+            await update(ref(db, 'users/' + uid), approve ? { role: u.requestedRole } : { requestedRole: u.role });
+            const wanted = ROLE_LABELS[u.requestedRole] || u.requestedRole;
+            await notify(uid,
+                approve ? 'Access approved' : 'Access request not approved',
+                approve ? `You now have ${wanted} access.`
+                        : `Your request for ${wanted} access was not approved. You remain ${ROLE_LABELS[u.role] || u.role}.`);
         };
 
         window.cloudPush = push;
+
+        // ---------- Announcements, notifications and documents (everyone signed in) ----------
+        function startCommon() {
+            if (commonStarted) return;
+            commonStarted = true;
+            const uid = window.currentUser.uid;
+
+            baseUnsubs.push(onValue(query(ref(db, 'announcements'), limitToLast(50)), (s) => {
+                window.announcements = s.val() || {};
+                updateAlertsUI();
+            }, (e) => console.warn('Announcements error:', e)));
+
+            baseUnsubs.push(onValue(query(ref(db, `notifications/${uid}`), limitToLast(50)), (s) => {
+                window.myNotifications = s.val() || {};
+                updateAlertsUI();
+            }, (e) => console.warn('Notifications error:', e)));
+
+            baseUnsubs.push(onValue(ref(db, 'policies/meta'), (s) => {
+                window.policies = s.val() || {};
+                renderFiles();
+            }, (e) => console.warn('Documents error:', e)));
+        }
+
+        function stopLiveListeners() {
+            baseUnsubs.forEach(u => u()); baseUnsubs = [];
+            roleUnsubs.forEach(u => u()); roleUnsubs = [];
+        }
+
+        function restartListeners() {
+            roomRef = null; commonStarted = false; activeRole = null;
+            if (!window.currentUser) return;
+            startRoom();
+            startCommon();
+            startRoleListeners(window.currentUser.role);
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => resolve(String(r.result).split(',')[1] || '');
+                r.onerror = () => reject(r.error || new Error('Could not read the file'));
+                r.readAsDataURL(file);
+            });
+        }
+
+        window.cloudApi = {
+            // Edit my own name (the student number is the login ID and stays fixed)
+            updateName: (name) => set(ref(db, `users/${window.currentUser.uid}/fullName`), name),
+
+            changePassword: async (current, next) => {
+                const user = auth.currentUser;
+                await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, current));
+                await updatePassword(user, next);
+            },
+
+            // Removes my notifications, my profile and finally my login
+            deleteAccount: async (password) => {
+                const user = auth.currentUser;
+                await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+                const uid = user.uid;
+                deletingAccount = true;
+                stopLiveListeners();
+                try {
+                    await remove(ref(db, `notifications/${uid}`)).catch(() => {});
+                    await remove(ref(db, `users/${uid}`));
+                    await deleteUser(user);
+                } catch (err) {
+                    deletingAccount = false;
+                    restartListeners();
+                    throw err;
+                }
+                showAuthError('Your account was deleted. You can sign up again any time.');
+            },
+
+            postAnnouncement: ({ title, body }) => {
+                const cu = window.currentUser;
+                return set(dbPush(ref(db, 'announcements')), {
+                    title, body, by: cu.uid, byName: cu.fullName, byRole: cu.role, createdAt: serverTimestamp()
+                });
+            },
+            deleteAnnouncement: (id) => remove(ref(db, `announcements/${id}`)),
+
+            markRead: (ids) => {
+                const uid = window.currentUser.uid;
+                return Promise.all(ids.map(id => set(ref(db, `notifications/${uid}/${id}/read`), true)));
+            },
+
+            uploadPolicy: async ({ title, file }) => {
+                const cu = window.currentUser;
+                const data = await fileToBase64(file);
+                const id = dbPush(ref(db, 'policies/meta')).key;
+                await set(ref(db, `policies/files/${id}`), { data });
+                try {
+                    await set(ref(db, `policies/meta/${id}`), {
+                        title,
+                        fileName: file.name.replace(/[\\/:*?"<>|]+/g, '_'),
+                        size: file.size,
+                        mime: file.type || 'application/octet-stream',
+                        by: cu.uid, byName: cu.fullName, byRole: cu.role,
+                        createdAt: serverTimestamp()
+                    });
+                } catch (err) {
+                    await remove(ref(db, `policies/files/${id}`)).catch(() => {});
+                    throw err;
+                }
+            },
+
+            downloadPolicy: async (id) => {
+                const meta = (window.policies || {})[id];
+                const snap = await get(ref(db, `policies/files/${id}`));
+                const val = snap.val();
+                if (!val || !val.data) throw new Error('File not found');
+                const bin = atob(val.data);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                const blob = new Blob([bytes], { type: (meta && meta.mime) || 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = (meta && meta.fileName) || 'document';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            },
+
+            // The file is removed first, while the info record still proves who owns it
+            deletePolicy: async (id) => {
+                await remove(ref(db, `policies/files/${id}`));
+                await remove(ref(db, `policies/meta/${id}`));
+            }
+        };
 
         // ---------- Start ----------
         function start() {
@@ -2072,6 +2606,152 @@
             </div>
             <div id="approvalsBody" class="p-4 sm:p-5 overflow-y-auto space-y-5 custom-scrollbar"></div>
         </div>
+    </div>
+    <!-- ACCOUNT SIDEBAR -->
+    <div id="accountOverlay" class="hidden fixed inset-0 z-[64] bg-slate-900/50 backdrop-blur-sm" onclick="closeAccount()"></div>
+    <aside id="accountDrawer" class="hidden fixed top-0 left-0 h-full w-full max-w-md z-[65] bg-white dark:bg-slate-800 shadow-2xl border-r border-slate-200 dark:border-slate-700 flex flex-col">
+        <div class="bg-[#2E1A47] px-5 py-4 border-b-2 border-[#FFD700] flex justify-between items-center">
+            <h3 class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide">My Account</h3>
+            <button onclick="closeAccount()" class="text-slate-300 hover:text-white text-lg" title="Close">
+                <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+            <button id="accTab-account" onclick="setAccountTab('account')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Account</button>
+            <button id="accTab-security" onclick="setAccountTab('security')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Security</button>
+            <button id="accTab-alerts" onclick="setAccountTab('alerts')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Alerts<span id="tabAlertsBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
+            <button id="accTab-files" onclick="setAccountTab('files')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Files</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+
+            <!-- ACCOUNT -->
+            <section id="accPanel-account" class="p-5 space-y-5">
+                <div class="flex items-center gap-3">
+                    <div id="accAvatar" class="w-12 h-12 shrink-0 rounded-full bg-[#2E1A47] text-[#FFD700] flex items-center justify-center font-black text-lg"></div>
+                    <div class="min-w-0">
+                        <div id="accName" class="font-extrabold text-slate-800 dark:text-slate-100 truncate"></div>
+                        <div id="accRole" class="text-xs font-semibold text-purple-700 dark:text-amber-300"></div>
+                    </div>
+                </div>
+                <div id="accPending" class="hidden rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 px-3 py-2 text-xs font-semibold"></div>
+
+                <form onsubmit="saveProfile(event)" class="space-y-3" novalidate>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Edit my details</h4>
+                    <div>
+                        <label for="accNameInput" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+                        <input id="accNameInput" type="text" autocomplete="name" maxlength="100"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="accSN" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student Number</label>
+                        <input id="accSN" type="text" disabled
+                            class="w-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                        <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Your student number is your login ID, so it can't be changed here.</p>
+                    </div>
+                    <button id="profileSaveBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Save Changes</button>
+                </form>
+
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-1">Delete account</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Permanently removes your login and profile. You would have to sign up again to get back in.</p>
+                    <button type="button" onclick="openDeleteAccount()" class="w-full border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white font-extrabold py-2.5 rounded-lg text-sm transition">Delete My Account</button>
+                </div>
+            </section>
+
+            <!-- SECURITY -->
+            <section id="accPanel-security" class="hidden p-5 space-y-4">
+                <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Change password</h4>
+                <div id="pwError" class="hidden rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-3 py-2 text-xs font-semibold"></div>
+                <form id="passwordForm" onsubmit="submitPasswordChange(event)" class="space-y-3" novalidate>
+                    <div>
+                        <label for="pwCurrent" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
+                        <input id="pwCurrent" type="password" autocomplete="current-password"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="pwNew" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">New Password</label>
+                        <input id="pwNew" type="password" autocomplete="new-password" placeholder="At least 8 characters"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="pwNew2" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+                        <input id="pwNew2" type="password" autocomplete="new-password"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <button id="pwSaveBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Update Password</button>
+                </form>
+            </section>
+
+            <!-- ALERTS -->
+            <section id="accPanel-alerts" class="hidden p-5 space-y-5">
+                <form id="annComposer" onsubmit="postAnnouncement(event)" class="hidden bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2" novalidate>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Post a special announcement</h4>
+                    <input id="annTitle" type="text" maxlength="120" placeholder="Title"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    <textarea id="annBody" rows="3" maxlength="2000" placeholder="Message for everyone"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none"></textarea>
+                    <button id="annPostBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Post Announcement</button>
+                </form>
+
+                <div id="adminAlertCard"></div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">My notifications</h4>
+                        <button type="button" onclick="markAllRead()" class="text-[11px] font-bold text-purple-700 dark:text-amber-300 hover:underline">Mark all as read</button>
+                    </div>
+                    <div id="notifList" class="space-y-2"></div>
+                </div>
+
+                <div>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Special announcements</h4>
+                    <div id="annList" class="space-y-2"></div>
+                </div>
+            </section>
+
+            <!-- FILES -->
+            <section id="accPanel-files" class="hidden p-5 space-y-5">
+                <form id="uploadForm" onsubmit="submitUpload(event)" class="hidden bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2" novalidate>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Upload a policy or document</h4>
+                    <input id="uploadTitle" type="text" maxlength="120" placeholder="Title (optional)"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    <input id="uploadFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg"
+                        class="w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[#2E1A47] file:text-[#FFD700] file:font-bold file:text-xs">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">PDF, Word, Excel, PowerPoint, text or image. Up to 3 MB each.</p>
+                    <button id="uploadBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Upload</button>
+                </form>
+
+                <div>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Policies &amp; documents</h4>
+                    <div id="filesList" class="space-y-2"></div>
+                </div>
+            </section>
+        </div>
+    </aside>
+
+    <!-- DELETE ACCOUNT CONFIRMATION -->
+    <div id="deleteAccountModal" class="hidden fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm" onclick="if (event.target === this) closeDeleteAccount()">
+        <form onsubmit="confirmDeleteAccount(event)" class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden" novalidate>
+            <div class="bg-rose-700 px-4 py-3">
+                <h3 class="font-extrabold text-sm text-white uppercase tracking-wide">Delete Account</h3>
+            </div>
+            <div class="p-5 space-y-3">
+                <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Are you sure you want to delete your account?</p>
+                <p class="text-xs text-slate-600 dark:text-slate-300">This permanently removes your login and profile and cannot be undone. Announcements, documents and schedule changes you already submitted will stay.</p>
+                <div>
+                    <label for="deletePw" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Enter your password to confirm</label>
+                    <input id="deletePw" type="password" autocomplete="current-password"
+                        class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-rose-500 outline-none">
+                </div>
+                <div id="deleteError" class="hidden rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-3 py-2 text-xs font-semibold"></div>
+            </div>
+            <div class="px-5 pb-5 flex justify-end gap-2">
+                <button type="button" onclick="closeDeleteAccount()" class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition">Cancel</button>
+                <button id="deleteConfirmBtn" type="submit" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow">Yes, Delete My Account</button>
+            </div>
+        </form>
     </div>
 </body>
 </html>
