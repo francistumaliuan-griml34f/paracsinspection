@@ -164,7 +164,7 @@
                     <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 text-xs py-1">
                         <a href="#" onclick="exportData('xlsx'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-emerald-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Excel (.xlsx)</a>
                         <a href="#" onclick="exportData('csv'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-blue-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> CSV (.csv)</a>
-                        <a href="#" onclick="exportData('docs'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-indigo-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Doc (.doc)</a>
+                        <a href="#" onclick="exportData('docs'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-indigo-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Word (.docx)</a>
                     </div>
                 </div>
 
@@ -188,6 +188,12 @@
                     <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                     <span id="approvalsLabel">Approvals</span>
                     <span id="approvalsBadge" class="hidden ml-1.5 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span>
+                </button>
+
+                <!-- Members (officers/executives) -->
+                <button id="membersBtn" onclick="openMembers()" class="hidden flex items-center bg-purple-900/80 hover:bg-purple-800 text-amber-300 px-3 py-1.5 rounded-lg border border-purple-700/50 text-xs font-bold transition">
+                    <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Members
                 </button>
 
                 <!-- Log out -->
@@ -715,6 +721,7 @@
                 el.classList.toggle('cursor-not-allowed', !modify);
             });
             document.getElementById('recordsBtn').classList.toggle('hidden', !admin);
+            document.getElementById('membersBtn').classList.toggle('hidden', !admin);
             document.getElementById('approvalsBtn').classList.toggle('hidden', !modify);
             document.getElementById('approvalsLabel').textContent = admin ? 'Approvals' : 'My Changes';
 
@@ -731,6 +738,85 @@
             window.renderUI();
             updateApprovalsUI();
             refreshAccountUI();
+        }
+
+        // ---- Members list: see every account and assign roles / co-admins ----
+        const ROLE_ORDER = { executive: 0, officer: 1, committee: 2, student: 3 };
+
+        function openMembers() {
+            if (!isAdminRole()) return;
+            document.getElementById('membersModal').classList.remove('hidden');
+            document.getElementById('membersSearch').value = '';
+            renderMembers();
+        }
+        function closeMembers() {
+            document.getElementById('membersModal').classList.add('hidden');
+        }
+
+        function renderMembers() {
+            if (!isAdminRole()) return;
+            const q = document.getElementById('membersSearch').value.trim().toLowerCase();
+            const me = myUid();
+            const all = Object.entries(window.allUsers || {}).map(([uid, u]) => ({ uid, ...u }));
+            const list = all
+                .filter(u => !q || String(u.fullName || '').toLowerCase().includes(q) || String(u.studentNumber || '').toLowerCase().includes(q))
+                .sort((a, b) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) || String(a.fullName).localeCompare(String(b.fullName)));
+
+            const counts = { executive: 0, officer: 0, committee: 0, student: 0 };
+            all.forEach(u => { if (counts[u.role] !== undefined) counts[u.role]++; });
+            document.getElementById('membersCount').textContent =
+                `${all.length} total · ${counts.executive} Executive · ${counts.officer} P&O · ${counts.committee} Committee · ${counts.student} Student`;
+
+            const roleStyle = {
+                executive: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                officer: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+                committee: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+                student: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+            };
+
+            document.getElementById('membersList').innerHTML = list.length === 0
+                ? '<p class="text-xs text-slate-400 italic">No matching accounts.</p>'
+                : list.map(u => {
+                    const mine = u.uid === me;
+                    const waiting = u.requestedRole && u.requestedRole !== u.role;
+                    const options = Object.keys(ROLE_LABELS).map(r =>
+                        `<option value="${r}" ${r === u.role ? 'selected' : ''}>${esc(ROLE_LABELS[r])}</option>`).join('');
+                    return `
+                    <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                        <div class="min-w-0">
+                            <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(u.fullName)}${mine ? ' <span class="text-[10px] font-bold text-purple-700 dark:text-amber-300">(You)</span>' : ''}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">${esc(u.studentNumber)}</div>
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${roleStyle[u.role] || ''}">${esc(ROLE_LABELS[u.role] || u.role)}</span>
+                                ${waiting ? `<span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">Requested: ${esc(ROLE_LABELS[u.requestedRole] || u.requestedRole)}</span>` : ''}
+                            </div>
+                        </div>
+                        ${mine ? '' : `
+                        <div class="shrink-0">
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">Role</label>
+                            <select onchange="changeRole('${esc(u.uid)}', this.value)"
+                                class="w-full sm:w-56 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">${options}</select>
+                        </div>`}
+                    </div>`;
+                }).join('');
+        }
+
+        function changeRole(uid, newRole) {
+            if (!isAdminRole() || uid === myUid()) { renderMembers(); return; }
+            const u = (window.allUsers || {})[uid];
+            if (!u || !ROLE_LABELS[newRole] || newRole === u.role) { renderMembers(); return; }
+            const gives = newRole === 'executive' || newRole === 'officer';
+            askConfirm({
+                title: 'Change Role',
+                message: `Change ${u.fullName} (${u.studentNumber}) from ${ROLE_LABELS[u.role] || u.role} to ${ROLE_LABELS[newRole]}?` +
+                    (gives ? '\n\nThis gives full access, including approving requests and changing other people\'s roles.' : ''),
+                confirmText: 'Yes, Change Role',
+                danger: !gives && (u.role === 'executive' || u.role === 'officer'),
+                onConfirm: () => window.cloudSetRole(uid, newRole).then(
+                    () => showToast('Role updated.', 'success'),
+                    () => { showToast('Could not change the role. Please try again.', 'error'); renderMembers(); })
+            });
+            renderMembers(); // put the box back to the real role until the change is confirmed
         }
 
         // ---- Approvals panel ----
@@ -758,6 +844,7 @@
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
             if (!document.getElementById('approvalsModal').classList.contains('hidden')) renderApprovals();
+            if (!document.getElementById('membersModal').classList.contains('hidden')) renderMembers();
         }
 
         function openApprovals() {
@@ -1661,6 +1748,14 @@
                         : `Your request for ${wanted} access was not approved. You remain ${ROLE_LABELS[u.role] || u.role}.`);
         };
 
+        // Officers/executives set anyone's role (this is how co-admins are assigned)
+        window.cloudSetRole = async (uid, role) => {
+            const u = (window.allUsers || {})[uid];
+            if (!u) throw new Error('Unknown account');
+            await update(ref(db, 'users/' + uid), { role, requestedRole: role });
+            await notify(uid, 'Your role was changed', `You are now ${ROLE_LABELS[role] || role}. Changed by ${window.currentUser.fullName}.`);
+        };
+
         window.cloudPush = push;
 
         // ---------- Announcements, notifications and documents (everyone signed in) ----------
@@ -2411,6 +2506,99 @@
             alert(`Live multi-browser sync link copied to clipboard!\n\nAnyone who opens this link has to log in first. Their role decides whether they can only view the schedule or also edit it:\n${shareUrl}`);
         }
 
+        // ---- Real Word (.docx) file builder: no library needed, so it also works on phones ----
+        const CRC_TABLE = (() => {
+            const t = new Uint32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                t[n] = c >>> 0;
+            }
+            return t;
+        })();
+        function crc32(bytes) {
+            let c = 0xFFFFFFFF;
+            for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        // Minimal ZIP writer (stored, no compression). files: [{ name, text }]
+        function makeZip(files) {
+            const enc = new TextEncoder();
+            const parts = [];
+            const central = [];
+            let offset = 0;
+            files.forEach(f => {
+                const name = enc.encode(f.name);
+                const data = enc.encode(f.text);
+                const crc = crc32(data);
+
+                const lh = new DataView(new ArrayBuffer(30));
+                lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+                lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x5821, true);
+                lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+                lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+                parts.push(new Uint8Array(lh.buffer), name, data);
+
+                const ch = new DataView(new ArrayBuffer(46));
+                ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+                ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x5821, true);
+                ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true);
+                ch.setUint16(28, name.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true);
+                ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+                central.push(new Uint8Array(ch.buffer), name);
+
+                offset += 30 + name.length + data.length;
+            });
+            const cdSize = central.reduce((n, p) => n + p.length, 0);
+            const end = new DataView(new ArrayBuffer(22));
+            end.setUint32(0, 0x06054b50, true); end.setUint16(4, 0, true); end.setUint16(6, 0, true);
+            end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+            end.setUint32(12, cdSize, true); end.setUint32(16, offset, true); end.setUint16(20, 0, true);
+
+            const all = [...parts, ...central, new Uint8Array(end.buffer)];
+            const out = new Uint8Array(all.reduce((n, p) => n + p.length, 0));
+            let pos = 0;
+            all.forEach(p => { out.set(p, pos); pos += p.length; });
+            return out;
+        }
+
+        function buildDocx(titleLines, subtitle, headers, rows) {
+            const x = v => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
+                // remove characters Word cannot store in XML
+                .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+            const run = (text, { bold = false, color = '', size = 20 } = {}) =>
+                `<w:r><w:rPr>${bold ? '<w:b/>' : ''}${color ? `<w:color w:val="${color}"/>` : ''}<w:sz w:val="${size}"/></w:rPr><w:t xml:space="preserve">${x(text)}</w:t></w:r>`;
+            const para = (inner, after = 0) => `<w:p><w:pPr><w:spacing w:before="0" w:after="${after}"/></w:pPr>${inner}</w:p>`;
+
+            const widths = [1900, 2700, 1500, 1700, 1700, 2300, 2040];
+            const cell = (text, w, head) =>
+                `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${head ? '<w:shd w:val="clear" w:color="auto" w:fill="2E1A47"/>' : ''}</w:tcPr>` +
+                para(run(text, head ? { bold: true, color: 'FFD700', size: 20 } : { size: 20 })) + '</w:tc>';
+            const headRow = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${headers.map((h, i) => cell(h, widths[i] || 1800, true)).join('')}</w:tr>`;
+            const bodyRows = rows.map(r => `<w:tr><w:trPr><w:cantSplit/></w:trPr>${r.map((v, i) => cell(v, widths[i] || 1800, false)).join('')}</w:tr>`).join('');
+            const border = n => `<w:${n} w:val="single" w:sz="4" w:space="0" w:color="999999"/>`;
+
+            const docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+                para(run(titleLines[0], { bold: true, color: '2E1A47', size: 32 })) +
+                para(run(titleLines[1], { bold: true, size: 26 }), 40) +
+                para(run(subtitle, { size: 20 }), 200) +
+                '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>' +
+                ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border).join('') +
+                '</w:tblBorders><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="110" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="110" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+                `<w:tblGrid>${headers.map((h, i) => `<w:gridCol w:w="${widths[i] || 1800}"/>`).join('')}</w:tblGrid>` +
+                headRow + bodyRows + '</w:tbl><w:p/>' +
+                '<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/><w:pgMar w:top="1000" w:right="1000" w:bottom="1000" w:left="1000" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>' +
+                '</w:body></w:document>';
+
+            return makeZip([
+                { name: '[Content_Types].xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
+                { name: '_rels/.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
+                { name: 'word/document.xml', text: docXml }
+            ]);
+        }
+
         // Export Functionality
         function exportData(format) {
             toggleExportDropdown();
@@ -2456,25 +2644,13 @@
                 // BOM so Excel opens the file as UTF-8
                 downloadBlob(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }), `${baseName}.csv`);
             } else if (format === 'docs') {
-                const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
                 const monthLabel = new Date(window.appState.year, window.appState.month, 1)
                     .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                const cellStyle = 'border:1px solid #999; padding:5px 8px; font-size:10pt;';
-                const headCells = headers.map(h => `<th style="${cellStyle} background:#2E1A47; color:#FFD700; text-align:left;">${esc(h)}</th>`).join('');
-                const bodyRows = rows.map(r => `<tr>${r.map(v => `<td style="${cellStyle}">${esc(v)}</td>`).join('')}</tr>`).join('');
-
-                const docContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                <head><meta charset='utf-8'><title>PLMar Inspection Schedule</title></head>
-                <body style="font-family: Arial, sans-serif;">
-                <h2 style="color:#2E1A47; margin:0;">PAMANTASAN NG LUNGSOD NG MARIKINA</h2>
-                <h3 style="margin:4px 0;">College of Criminology - Inspection Schedule Report</h3>
-                <p style="margin:0 0 10px 0; font-size:10pt;">${esc(monthLabel)} &bull; ${rows.length} inspection(s) &bull; Generated ${esc(new Date().toLocaleString())}</p>
-                <table style="border-collapse:collapse; width:100%;">
-                <thead><tr>${headCells}</tr></thead>
-                <tbody>${bodyRows}</tbody>
-                </table></body></html>`;
-
-                downloadBlob(new Blob(['﻿', docContent], { type: 'application/msword' }), `${baseName}.doc`);
+                const subtitle = `${monthLabel} \u2022 ${rows.length} inspection(s) \u2022 Generated ${new Date().toLocaleString()}`;
+                const bytes = buildDocx(
+                    ['PAMANTASAN NG LUNGSOD NG MARIKINA', 'College of Criminology - Inspection Schedule Report'],
+                    subtitle, headers, rows);
+                downloadBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), `${baseName}.docx`);
             }
         }
 
@@ -2486,7 +2662,7 @@
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
 
         // Toggles & Utilities
@@ -2756,6 +2932,23 @@
                 <button id="deleteConfirmBtn" type="submit" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow">Yes, Delete My Account</button>
             </div>
         </form>
+    </div>
+    <!-- MEMBERS (all accounts) -->
+    <div id="membersModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onclick="if (event.target === this) closeMembers()">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="bg-[#2E1A47] px-5 py-4 border-b-2 border-[#FFD700] flex justify-between items-center">
+                <h3 class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide">All Accounts <span id="membersCount" class="ml-2 text-[11px] font-bold text-purple-200 normal-case"></span></h3>
+                <button onclick="closeMembers()" class="text-slate-300 hover:text-white text-lg" title="Close">
+                    <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700 space-y-2">
+                <input id="membersSearch" type="search" oninput="renderMembers()" placeholder="Search by name or student number"
+                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">Use the Role box to make someone a co-admin (Executive Officer or Peace and Order Officer) or to change their access. You cannot change your own role.</p>
+            </div>
+            <div id="membersList" class="p-4 overflow-y-auto space-y-2 custom-scrollbar"></div>
+        </div>
     </div>
 </body>
 </html>
