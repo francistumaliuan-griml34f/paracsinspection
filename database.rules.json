@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && ((auth.uid === $uid && !data.exists()) || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))",
+        ".validate": "newData.hasChildren(['fullName', 'studentNumber', 'role', 'requestedRole'])",
+        "fullName": {
+          ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 100"
+        },
+        "studentNumber": {
+          ".validate": "newData.isString() && newData.val().length >= 5 && newData.val().length <= 30 && (data.exists() || newData.val().toLowerCase() + '@plmar-criminology.app' === auth.token.email)"
+        },
+        "role": {
+          ".validate": "(newData.val() === 'student' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive') && (newData.val() === 'student' || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))"
+        },
+        "requestedRole": {
+          ".validate": "(newData.val() === 'student' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive')"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "rooms": {
+      "$room": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
+        ".validate": "newData.hasChildren(['json', 'writer', 'updatedAt'])"
+      }
+    },
+    "proposals": {
+      "$room": {
+        ".read": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee')",
+        "$pid": {
+          ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || (root.child('users').child(auth.uid).child('role').val() === 'committee' && !data.exists() && newData.child('by').val() === auth.uid && newData.child('status').val() === 'pending'))",
+          ".validate": "newData.hasChildren(['json', 'by', 'byName', 'status', 'createdAt'])"
+        }
+      }
+    }
+  }
+}

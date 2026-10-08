@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLMar Criminology Inspection Schedule Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'midnight-purple': '#2E1A47',
+                        'plmar-gold': '#FFD700',
+                        'year-1st': '#1e88e5',
+                        'year-2nd': '#8e24aa',
+                        'year-3rd': '#f57f17',
+                        'year-4th': '#d84315'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- SheetJS (Excel export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="h-full bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-200 flex flex-col min-h-screen">
+
+    <!-- LOGIN / SIGN UP (shown first) -->
+    <div id="authScreen" class="fixed inset-0 z-[100] overflow-y-auto bg-gradient-to-br from-[#2E1A47] via-[#3b2260] to-[#1b0f2e]">
+        <div class="min-h-full flex items-center justify-center p-4">
+            <div class="w-full max-w-md">
+                <div class="text-center mb-5">
+                    <p class="text-[11px] font-black tracking-wider text-[#FFD700] uppercase">Pamantasan ng Lungsod ng Marikina</p>
+                    <h1 class="text-lg font-extrabold text-white uppercase">College of Criminology</h1>
+                    <p class="text-xs text-purple-200 font-semibold">Inspection Schedule Dashboard</p>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-t-4 border-[#FFD700] overflow-hidden">
+                    <div id="authLoading" class="p-10 text-center text-xs font-bold text-slate-500 dark:text-slate-400">Checking your session...</div>
+
+                    <div id="authPanel" class="hidden p-5 sm:p-6">
+                        <div class="flex gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-4">
+                            <button type="button" id="tabLogin" onclick="setAuthMode('login')" class="flex-1 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wide transition bg-[#2E1A47] text-[#FFD700] shadow">Log In</button>
+                            <button type="button" id="tabSignup" onclick="setAuthMode('signup')" class="flex-1 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wide transition text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white">Sign Up</button>
+                        </div>
+
+                        <div id="authError" class="hidden mb-4 rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-3 py-2 text-xs font-semibold"></div>
+
+                        <!-- Log in -->
+                        <form id="loginForm" onsubmit="submitLogin(event)" class="space-y-4" novalidate>
+                            <div>
+                                <label for="loginSN" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student Number</label>
+                                <input id="loginSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-24-01294-A"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 uppercase placeholder:normal-case focus:ring-2 focus:ring-purple-600 outline-none">
+                            </div>
+                            <div>
+                                <label for="loginPw" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                                <input id="loginPw" type="password" autocomplete="current-password"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                            </div>
+                            <button id="loginBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Log In</button>
+                            <p class="text-center text-xs text-slate-500 dark:text-slate-400">No account yet? <button type="button" onclick="setAuthMode('signup')" class="font-extrabold text-purple-700 dark:text-purple-300 hover:underline">Sign up</button></p>
+                        </form>
+
+                        <!-- Sign up -->
+                        <form id="signupForm" onsubmit="submitSignup(event)" class="hidden space-y-4" novalidate>
+                            <div>
+                                <label for="signupName" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+                                <input id="signupName" type="text" autocomplete="name" placeholder="Juan Dela Cruz"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                            </div>
+                            <div>
+                                <label for="signupSN" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student Number</label>
+                                <input id="signupSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-24-01294-A"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 uppercase placeholder:normal-case focus:ring-2 focus:ring-purple-600 outline-none">
+                            </div>
+                            <div>
+                                <label for="signupRole" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Role</label>
+                                <select id="signupRole" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                                    <option value="student">Student (view only)</option>
+                                    <option value="committee">Disciplinary Committee</option>
+                                    <option value="officer">Peace and Order Officer</option>
+                                    <option value="executive">Executive Officer</option>
+                                </select>
+                                <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Committee, Peace and Order Officer and Executive accounts must be approved by an officer. Until then you can only view the schedule.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label for="signupPw" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                                    <input id="signupPw" type="password" autocomplete="new-password" placeholder="At least 8 characters"
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                                </div>
+                                <div>
+                                    <label for="signupPw2" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Confirm Password</label>
+                                    <input id="signupPw2" type="password" autocomplete="new-password"
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                                </div>
+                            </div>
+                            <button id="signupBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Create Account</button>
+                            <p class="text-center text-xs text-slate-500 dark:text-slate-400">Already registered? <button type="button" onclick="setAuthMode('login')" class="font-extrabold text-purple-700 dark:text-purple-300 hover:underline">Log in</button></p>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP (hidden until signed in) -->
+    <div id="appShell" class="hidden flex flex-col flex-1">
+
+    <!-- HEADER -->
+    <header class="bg-[#2E1A47] border-b-4 border-[#FFD700] text-white p-4 shadow-xl sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-4">
+            
+            <!-- Left Branding Header -->
+            <div class="flex items-center space-x-3 text-center lg:text-left">
+                <div>
+                    <h1 class="text-xs sm:text-sm font-black tracking-wider text-[#FFD700] uppercase">PAMANTASAN NG LUNGSOD NG MARIKINA</h1>
+                    <h2 class="text-sm sm:text-base font-extrabold tracking-tight text-white uppercase">COLLEGE OF CRIMINOLOGY</h2>
+                    <p class="text-[10px] sm:text-xs text-purple-200 font-semibold tracking-wide">
+                        PEACEFUL AND RESPONSIBLE ALLIANCE OF CRIMINOLOGY STUDENTS • DISCIPLINARY COMMITTEE
+                    </p>
+                </div>
+            </div>
+
+            <!-- Upper Right Action Toolbar -->
+            <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2 sm:gap-3">
+                
+                <!-- Cloud Real-time Badge -->
+                <div id="syncBadge" class="flex items-center space-x-2 bg-purple-950/80 px-3 py-1.5 rounded-full border border-amber-500/30 text-xs font-semibold text-amber-300">
+                    <span id="syncDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    <span id="syncText">Connecting...</span>
+                </div>
+
+                <!-- Share Live Sync Session Button -->
+                <button onclick="shareLiveSession()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center transition shadow" title="Copy live URL to sync across browsers">
+                    <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Sync Link
+                </button>
+
+                <!-- View Switcher -->
+                <div class="bg-purple-950/60 p-1 rounded-lg border border-purple-700/50 flex text-xs">
+                    <button id="viewGridBtn" onclick="switchView('grid')" class="px-2.5 py-1 rounded-md font-bold transition bg-[#FFD700] text-[#2E1A47] shadow">
+                        <svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Grid
+                    </button>
+                    <button id="viewListBtn" onclick="switchView('list')" class="px-2.5 py-1 rounded-md font-bold text-purple-200 hover:text-white transition">
+                        <svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> List
+                    </button>
+                </div>
+
+                <!-- Export Menu -->
+                <div class="relative inline-block text-left">
+                    <button onclick="toggleExportDropdown()" class="bg-[#FFD700] hover:bg-amber-300 text-[#2E1A47] font-bold px-3 py-1.5 rounded-lg text-xs flex items-center transition shadow">
+                        <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export <svg class="shrink-0 ml-1.5 text-[10px]" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 text-xs py-1">
+                        <a href="#" onclick="exportData('xlsx'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-emerald-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Excel (.xlsx)</a>
+                        <a href="#" onclick="exportData('csv'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-blue-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> CSV (.csv)</a>
+                        <a href="#" onclick="exportData('docs'); return false;" class="block px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-700 font-medium"><svg class="shrink-0 text-indigo-600 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> Doc (.doc)</a>
+                    </div>
+                </div>
+
+                <!-- Signed-in user -->
+                <div id="userChip" class="hidden flex items-center space-x-2 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-700/50">
+                    <svg class="shrink-0 text-amber-300" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <div class="leading-tight text-left">
+                        <div id="userName" class="text-[11px] font-bold text-white max-w-[150px] truncate"></div>
+                        <div id="userRole" class="text-[10px] font-semibold text-amber-300"></div>
+                    </div>
+                </div>
+
+                <!-- Approvals (officers/executives) or My Changes (committee) -->
+                <button id="approvalsBtn" onclick="openApprovals()" class="hidden flex items-center bg-purple-900/80 hover:bg-purple-800 text-amber-300 px-3 py-1.5 rounded-lg border border-purple-700/50 text-xs font-bold transition">
+                    <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span id="approvalsLabel">Approvals</span>
+                    <span id="approvalsBadge" class="hidden ml-1.5 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span>
+                </button>
+
+                <!-- Log out -->
+                <button onclick="window.authApi && window.authApi.logout()" class="flex items-center bg-purple-900/80 hover:bg-purple-800 text-amber-300 px-3 py-1.5 rounded-lg border border-purple-700/50 text-xs font-bold transition" title="Log out">
+                    <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Log out
+                </button>
+
+                <!-- Theme Toggle -->
+                <button onclick="toggleTheme()" class="bg-purple-900/80 hover:bg-purple-800 text-amber-300 p-2 rounded-lg border border-purple-700/50 transition" title="Toggle Dark/Light Mode">
+                    <span id="themeIcon" class="inline-flex"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+                </button>
+
+                <!-- Sidebar Drawer Toggle -->
+                <button id="recordsBtn" onclick="toggleSidebar()" class="bg-[#FFD700] hover:bg-amber-300 text-[#2E1A47] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center transition shadow">
+                    <svg class="shrink-0 mr-1.5" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/></svg> Records
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <div class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col space-y-6">
+
+        <div id="roleBanner" class="hidden rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 px-4 py-3 text-xs font-semibold"></div>
+
+        <!-- Controls & Date Selection Bar -->
+        <section class="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 sm:p-5 border border-slate-200 dark:border-slate-700 transition">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+
+                <!-- Month & Year Chooser (2026-2050) -->
+                <div class="flex items-center space-x-3">
+                    <div class="p-2.5 bg-purple-100 dark:bg-purple-950 rounded-lg text-[#2E1A47] dark:text-amber-300 font-bold">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <select id="monthSelect" onchange="handleMonthYearChange()" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-purple-600 outline-none">
+                            <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+                            <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+                            <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+                            <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+                        </select>
+                        <select id="yearSelect" onchange="handleMonthYearChange()" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-purple-600 outline-none">
+                            <!-- Populated 2026 to 2050 -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Individual 4-Day Date Pickers -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
+                    <div class="bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <label class="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase">Mon Date</label>
+                        <input type="date" id="date-Mon" onchange="handleDateChange()" class="w-full bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <label class="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase">Tue Date</label>
+                        <input type="date" id="date-Tue" onchange="handleDateChange()" class="w-full bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <label class="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase">Thu Date</label>
+                        <input type="date" id="date-Thu" onchange="handleDateChange()" class="w-full bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <label class="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase">Fri Date</label>
+                        <input type="date" id="date-Fri" onchange="handleDateChange()" class="w-full bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Add Inspection Button -->
+                <button id="addScheduleBtn" onclick="openModal()" class="bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold px-4 py-2.5 rounded-lg text-xs sm:text-sm flex items-center justify-center space-x-2 border border-amber-400/40 shadow transition">
+                    <svg class="shrink-0 text-[#FFD700]" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                    <span id="addBtnLabel">Add Schedule</span>
+                </button>
+            </div>
+
+            <!-- Year Level Legend with Color Codes -->
+            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-3 text-xs font-bold">
+                <span class="text-slate-500 dark:text-slate-400 text-[11px] font-extrabold uppercase mr-1">Year Level Legend:</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded border border-[#1e88e5]/40 text-[#1e88e5] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40"><span class="w-2.5 h-2.5 rounded-full bg-[#1e88e5] mr-1.5"></span> 1st Year (Blue)</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded border border-[#8e24aa]/40 text-[#8e24aa] dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40"><span class="w-2.5 h-2.5 rounded-full bg-[#8e24aa] mr-1.5"></span> 2nd Year (Purple)</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded border border-[#f57f17]/40 text-[#b76e00] dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40"><span class="w-2.5 h-2.5 rounded-full bg-[#f57f17] mr-1.5"></span> 3rd Year (Yellow)</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded border border-[#d84315]/40 text-[#d84315] dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40"><span class="w-2.5 h-2.5 rounded-full bg-[#d84315] mr-1.5"></span> 4th Year (Rust)</span>
+            </div>
+        </section>
+
+        <!-- Real-Time Progress Monitoring Bar -->
+        <section class="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 sm:p-5 border border-slate-200 dark:border-slate-700">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-3">
+                <h3 class="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center">
+                    <svg class="shrink-0 mr-2 text-purple-600 dark:text-purple-400" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> Live Real-Time Progress Monitor
+                </h3>
+                <div class="flex flex-wrap items-center gap-3 text-xs font-bold">
+                    <span class="text-slate-600 dark:text-slate-300">Total: <span id="cnt-total" class="text-slate-900 dark:text-white font-extrabold">0</span></span>
+                    <span class="text-amber-600 dark:text-amber-400"><svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pending: <span id="cnt-pending">0</span></span>
+                    <span class="text-blue-600 dark:text-blue-400"><svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>In Progress: <span id="cnt-in-progress">0</span></span>
+                    <span class="text-emerald-600 dark:text-emerald-400"><svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Done: <span id="cnt-done">0</span></span>
+                    <span class="text-rose-600 dark:text-rose-400"><svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>Cancelled: <span id="cnt-cancelled">0</span></span>
+                </div>
+            </div>
+
+            <!-- Segmented Progress Bar -->
+            <div class="w-full h-3.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex shadow-inner">
+                <div id="bar-done" class="bg-emerald-500 h-full transition-all duration-300" title="Done"></div>
+                <div id="bar-in-progress" class="bg-blue-500 h-full transition-all duration-300" title="In Progress"></div>
+                <div id="bar-pending" class="bg-amber-400 h-full transition-all duration-300" title="Pending"></div>
+                <div id="bar-cancelled" class="bg-rose-500 h-full transition-all duration-300" title="Cancelled"></div>
+            </div>
+        </section>
+
+        <!-- Search & Filters -->
+        <section class="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="relative flex-1">
+                    <svg class="shrink-0 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="search" id="searchInput" oninput="setSearch(this.value)" placeholder="Search section, room, time, day..."
+                        class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-8 pr-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-purple-600 outline-none">
+                </div>
+                <div class="flex items-center justify-between sm:justify-end gap-3 text-xs font-bold">
+                    <span id="filterResultCount" class="text-slate-500 dark:text-slate-400"></span>
+                    <button id="clearFiltersBtn" onclick="clearFilters()" class="hidden text-rose-600 dark:text-rose-400 hover:underline">
+                        <svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Clear filters
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-col lg:flex-row lg:items-center gap-3 text-xs font-bold">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-slate-500 dark:text-slate-400 text-[11px] font-extrabold uppercase mr-1">Year Level:</span>
+                    <div id="yearFilterBtns" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 lg:ml-4">
+                    <span class="text-slate-500 dark:text-slate-400 text-[11px] font-extrabold uppercase mr-1">Progress:</span>
+                    <div id="statusFilterBtns" class="flex flex-wrap gap-1.5"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Schedule View Area -->
+        <main id="scheduleContainer" class="flex-1">
+            <!-- Grid View (Auto-sorted Chronologically) -->
+            <div id="gridView" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Columns dynamically injected via JavaScript -->
+            </div>
+
+            <!-- List View -->
+            <div id="listView" class="hidden bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-[#2E1A47] text-[#FFD700] uppercase font-black text-[11px] tracking-wider">
+                            <tr>
+                                <th class="p-3">Day & Date</th>
+                                <th class="p-3">Time</th>
+                                <th class="p-3">Year Level</th>
+                                <th class="p-3">Section</th>
+                                <th class="p-3">Room</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listViewBody" class="divide-y divide-slate-200 dark:divide-slate-700">
+                            <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    </div>
+    <!-- end of #appShell -->
+
+    <!-- SIDEBAR DRAWER: PAST INSPECTION RECORDS -->
+    <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden transition-opacity"></div>
+    <aside id="sidebar" class="fixed top-0 right-0 h-full w-80 sm:w-96 bg-white dark:bg-slate-800 shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200 dark:border-slate-700">
+        <div class="p-4 bg-[#2E1A47] text-white flex justify-between items-center border-b-2 border-[#FFD700]">
+            <div>
+                <h3 class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide"><svg class="shrink-0 mr-2" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 7 12 12 15 14"/></svg> Records & History</h3>
+                <p class="text-[10px] text-slate-300">Saved Cloud Schedule Snapshots</p>
+            </div>
+            <button onclick="toggleSidebar()" class="text-slate-300 hover:text-white p-1 text-lg">
+                <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <div class="p-4 bg-purple-50 dark:bg-purple-950/40 border-b border-purple-100 dark:border-purple-900/50">
+            <button onclick="saveCurrentSnapshot()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center space-x-2 shadow transition">
+                <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>Save Current Snapshot</span>
+            </button>
+        </div>
+
+        <div id="snapshotList" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+            <!-- Dynamic History Snapshots -->
+        </div>
+    </aside>
+
+    <!-- MODAL: ADD / EDIT INSPECTION ITEM -->
+    <div id="scheduleModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-700 overflow-hidden transform transition-all">
+            <div class="bg-[#2E1A47] px-5 py-4 text-white border-b-2 border-[#FFD700] flex justify-between items-center">
+                <h3 id="modalTitle" class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide">Add Inspection Schedule</h3>
+                <button onclick="closeModal()" class="text-slate-300 hover:text-white text-lg"><svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+
+            <form id="inspectionForm" onsubmit="handleFormSubmit(event)" class="p-5 space-y-4">
+                <input type="hidden" id="itemId">
+
+                <!-- Inspection Day -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Inspection Day</label>
+                    <select id="itemDay" required class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-purple-600 outline-none">
+                        <option value="Mon">Monday</option>
+                        <option value="Tue">Tuesday</option>
+                        <option value="Thu">Thursday</option>
+                        <option value="Fri">Friday</option>
+                    </select>
+                </div>
+
+                <!-- Year Level & NATO Section Choice -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Year Level</label>
+                        <select id="itemYear" required class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-purple-600 outline-none">
+                            <option value="1">1st Year (Blue)</option>
+                            <option value="2">2nd Year (Purple)</option>
+                            <option value="3">3rd Year (Yellow)</option>
+                            <option value="4">4th Year (Rust)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Section (NATO)</label>
+                        <select id="itemSection" required class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-purple-600 outline-none">
+                            <!-- Populated Alpha to Zulu -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Scroll Time Pickers (HH, MM, AM/PM) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Schedule Time</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <select id="timeHour" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs font-bold outline-none"></select>
+                        <select id="timeMin" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs font-bold outline-none"></select>
+                        <select id="timeAmpm" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs font-bold outline-none">
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Room & Status -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Room Assignment</label>
+                        <select id="itemRoom" required class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-purple-600 outline-none"><option value="TBA">TBA</option><option value="RM 401">RM 401</option><option value="RM 402">RM 402</option><option value="RM 403">RM 403</option><option value="RM 404">RM 404</option><option value="RM 405">RM 405</option><option value="RM 406">RM 406</option><option value="RM 407">RM 407</option><option value="RM 408">RM 408</option><option value="RM 409">RM 409</option><option value="RM 410">RM 410</option><option value="RM 411">RM 411</option><option value="RM 412">RM 412</option></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+                        <select id="itemStatus" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-purple-600 outline-none">
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Done">Done</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition">Cancel</button>
+                    <button type="submit" id="modalSubmitBtn" class="px-4 py-2 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] rounded-lg text-xs font-bold border border-amber-400/30 transition shadow">Save Schedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- APPLICATION LOGIC & CLOUD SYNC (Firebase Realtime Database) -->
+    <script>
+        // URL Session ID Extraction or Generation
+        const urlParams = new URLSearchParams(window.location.search);
+        let sessionId = (urlParams.get('room') || 'plmar-main-session').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100) || 'plmar-main-session';
+        window.currentSessionId = sessionId;
+
+
+
+        // State Store
+        window.appState = {
+            month: 9, // October (0-indexed 9)
+            year: 2026,
+            dayDates: { Mon: '2026-10-05', Tue: '2026-10-06', Thu: '2026-10-08', Fri: '2026-10-09' },
+            items: [],
+            snapshots: [],
+            currentView: 'grid'
+        };
+
+        // Load Default Initial Schedules
+        function loadDefaultSchedule() {
+            return [
+                { id: '1', day: 'Mon', year: 1, section: 'Charlie', time: '10:00 AM', room: 'RM 406', status: 'Pending' },
+                { id: '2', day: 'Mon', year: 4, section: 'Alpha', time: '10:00 AM', room: 'RM 404', status: 'In Progress' },
+                { id: '3', day: 'Mon', year: 1, section: 'Delta', time: '01:00 PM', room: 'RM 401', status: 'Pending' },
+                { id: '4', day: 'Mon', year: 4, section: 'Bravo', time: '02:00 PM', room: 'RM 404', status: 'Done' },
+                { id: '5', day: 'Mon', year: 1, section: 'Foxtrot', time: '04:00 PM', room: 'RM 403', status: 'Pending' },
+                { id: '6', day: 'Tue', year: 1, section: 'Bravo', time: '11:00 AM', room: 'RM 403', status: 'Done' },
+                { id: '7', day: 'Tue', year: 2, section: 'Alpha', time: '11:00 AM', room: 'TBA', status: 'Pending' },
+                { id: '8', day: 'Tue', year: 2, section: 'Bravo', time: '11:00 AM', room: 'TBA', status: 'Pending' },
+                { id: '9', day: 'Tue', year: 4, section: 'Delta', time: '12:00 PM', room: 'TBA', status: 'In Progress' },
+                { id: '10', day: 'Tue', year: 1, section: 'Alpha', time: '01:00 PM', room: 'RM 402', status: 'Done' },
+                { id: '11', day: 'Thu', year: 2, section: 'Delta', time: '11:00 AM', room: 'TBA', status: 'Pending' },
+                { id: '12', day: 'Thu', year: 3, section: 'Alpha', time: '11:00 AM', room: 'RM 409', status: 'Pending' },
+                { id: '13', day: 'Thu', year: 4, section: 'Echo', time: '11:00 AM', room: 'RM 408', status: 'Done' },
+                { id: '14', day: 'Thu', year: 3, section: 'Echo', time: '12:00 PM', room: 'RM 402', status: 'Pending' },
+                { id: '15', day: 'Thu', year: 3, section: 'Golf', time: '12:30 PM', room: 'RM 402', status: 'Pending' },
+                { id: '16', day: 'Thu', year: 1, section: 'Golf', time: '01:00 PM', room: 'RM 403', status: 'In Progress' },
+                { id: '17', day: 'Thu', year: 4, section: 'Foxtrot', time: '04:10 PM', room: 'RM 402', status: 'Pending' },
+                { id: '18', day: 'Fri', year: 1, section: 'Echo', time: '10:00 AM', room: 'RM 403', status: 'Done' },
+                { id: '19', day: 'Fri', year: 3, section: 'Bravo', time: '11:00 AM', room: 'RM 409', status: 'Done' },
+                { id: '20', day: 'Fri', year: 2, section: 'Charlie', time: '11:00 AM', room: 'TBA', status: 'Pending' },
+                { id: '21', day: 'Fri', year: 2, section: 'Echo', time: '11:00 AM', room: 'TBA', status: 'Pending' },
+                { id: '22', day: 'Fri', year: 3, section: 'Delta', time: '11:30 AM', room: 'RM 406', status: 'In Progress' },
+                { id: '23', day: 'Fri', year: 3, section: 'Charlie', time: '12:00 PM', room: 'RM 402', status: 'Pending' },
+                { id: '24', day: 'Fri', year: 4, section: 'Charlie', time: '12:00 PM', room: 'RM 408', status: 'Done' },
+                { id: '25', day: 'Fri', year: 3, section: 'Foxtrot', time: '12:30 PM', room: 'TBA', status: 'Pending' },
+                { id: '26', day: 'Fri', year: 2, section: 'Foxtrot', time: '04:00 PM', room: 'TBA', status: 'Pending' },
+                { id: '27', day: 'Fri', year: 4, section: 'Golf', time: '04:10 PM', room: 'RM 410', status: 'Pending' }
+            ];
+        }
+
+        function applyState(data) {
+            if (!data) return;
+            if (data.month !== undefined) window.appState.month = data.month;
+            if (data.year !== undefined) window.appState.year = data.year;
+            if (data.dayDates) window.appState.dayDates = data.dayDates;
+            if (data.items) window.appState.items = data.items;
+            if (data.snapshots) window.appState.snapshots = data.snapshots;
+        }
+
+        function sharedState() {
+            return {
+                month: window.appState.month,
+                year: window.appState.year,
+                dayDates: window.appState.dayDates,
+                items: window.appState.items,
+                snapshots: window.appState.snapshots
+            };
+        }
+
+        // Local Storage Cache Engine (offline fallback)
+        function loadFromLocalCache() {
+            const cached = localStorage.getItem(`plmar_state_${sessionId}`);
+            if (cached) {
+                try {
+                    applyState(JSON.parse(cached));
+                    return true;
+                } catch(e) {}
+            }
+            window.appState.items = loadDefaultSchedule();
+            return false;
+        }
+
+        function saveToLocalCache() {
+            localStorage.setItem(`plmar_state_${sessionId}`, JSON.stringify(sharedState()));
+        }
+
+        // ================= ACCOUNTS, ROLES & APPROVALS =================
+        window.currentUser = null;      // { uid, fullName, studentNumber, role, requestedRole }
+        window.allUsers = {};           // officers/executives only: every account
+        window.proposals = {};          // officers/executives/committee: schedule change requests
+        window.cloudBaseline = null;    // last schedule received from the cloud (used to detect committee edits)
+
+        const ROLE_LABELS = {
+            student: 'Student (Viewer)',
+            committee: 'Disciplinary Committee',
+            officer: 'Peace and Order Officer',
+            executive: 'Executive Officer'
+        };
+        const ITEM_FIELDS = ['day', 'year', 'section', 'time', 'room', 'status'];
+        const FIELD_LABELS = { day: 'Day', year: 'Year', section: 'Section', time: 'Time', room: 'Room', status: 'Status' };
+        const DAY_KEYS = ['Mon', 'Tue', 'Thu', 'Fri'];
+        const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        function currentRole() { return window.currentUser ? window.currentUser.role : null; }
+        function isAdminRole() { const r = currentRole(); return r === 'executive' || r === 'officer'; }
+        function isCommitteeRole() { return currentRole() === 'committee'; }
+        function canModify() { return isAdminRole() || isCommitteeRole(); }
+
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        function showToast(message, kind = 'info') {
+            let box = document.getElementById('toastBox');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'toastBox';
+                box.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] flex flex-col items-center gap-2 px-4 w-full max-w-md pointer-events-none';
+                document.body.appendChild(box);
+            }
+            const t = document.createElement('div');
+            const color = kind === 'error' ? 'bg-rose-600' : kind === 'success' ? 'bg-emerald-600' : 'bg-[#2E1A47] border border-[#FFD700]/50';
+            t.className = `${color} text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-xl pointer-events-auto transition-opacity duration-300`;
+            t.textContent = message;
+            box.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4500);
+        }
+
+        // ---- Detecting and applying schedule changes (used for committee approval) ----
+        function describeItem(it) {
+            if (!it) return '';
+            return `${ordinal(it.year)} Year ${it.section}, ${getDayFullName(it.day)} ${it.time}, ${it.room} [${it.status}]`;
+        }
+        function sameItem(a, b) { return ITEM_FIELDS.every(k => String(a[k]) === String(b[k])); }
+        function sameDates(a, b) {
+            return a.month === b.month && a.year === b.year &&
+                DAY_KEYS.every(k => (a.dayDates || {})[k] === (b.dayDates || {})[k]);
+        }
+
+        function computeChanges(base, cur) {
+            const changes = [];
+            const bMap = new Map((base.items || []).map(i => [i.id, i]));
+            const cMap = new Map((cur.items || []).map(i => [i.id, i]));
+            cMap.forEach((item, id) => {
+                if (!bMap.has(id)) changes.push({ type: 'add', itemId: id, item });
+                else if (!sameItem(bMap.get(id), item)) changes.push({ type: 'edit', itemId: id, item, before: bMap.get(id) });
+            });
+            bMap.forEach((item, id) => {
+                if (!cMap.has(id)) changes.push({ type: 'delete', itemId: id, before: item });
+            });
+            if (!sameDates(base, cur)) {
+                changes.push({
+                    type: 'dates', month: cur.month, year: cur.year, dayDates: cur.dayDates,
+                    before: { month: base.month, year: base.year, dayDates: base.dayDates }
+                });
+            }
+            return changes;
+        }
+
+        // Applies one approved change to the live schedule. Returns false if it no longer applies.
+        function applyChangeToState(ch) {
+            const st = window.appState;
+            if (ch.type === 'add') {
+                const idx = st.items.findIndex(i => i.id === ch.item.id);
+                if (idx > -1) st.items[idx] = ch.item; else st.items.push(ch.item);
+                return true;
+            }
+            if (ch.type === 'edit') {
+                const idx = st.items.findIndex(i => i.id === ch.itemId);
+                if (idx === -1) return false;
+                st.items[idx] = ch.item;
+                return true;
+            }
+            if (ch.type === 'delete') {
+                st.items = st.items.filter(i => i.id !== ch.itemId);
+                return true;
+            }
+            if (ch.type === 'dates') {
+                st.month = ch.month; st.year = ch.year; st.dayDates = ch.dayDates;
+                return true;
+            }
+            return false;
+        }
+
+        // Committee members never write the schedule directly: their edit is turned into
+        // approval requests and the screen goes back to the approved schedule.
+        function submitCommitteeChanges() {
+            const base = window.cloudBaseline;
+            const changes = base ? computeChanges(base, sharedState()) : [];
+            if (base) applyState(JSON.parse(JSON.stringify(base)));
+            window.renderUI();
+            if (!changes.length) return;
+            if (!window.cloudPropose) { showToast('Not connected. Your change was not submitted.', 'error'); return; }
+            window.cloudPropose(changes).then(
+                () => showToast(`Sent ${changes.length} change${changes.length > 1 ? 's' : ''} to a Peace and Order Officer for approval.`, 'success'),
+                () => showToast('Could not submit your change. Please try again.', 'error')
+            );
+        }
+
+        // Save: officers/executives write the schedule; committee sends it for approval; students cannot change it
+        window.saveStateToCloud = function() {
+            if (isCommitteeRole()) { submitCommitteeChanges(); return; }
+            if (!isAdminRole()) {
+                if (window.cloudBaseline) applyState(JSON.parse(JSON.stringify(window.cloudBaseline)));
+                window.renderUI();
+                return;
+            }
+            saveToLocalCache();
+            if (window.cloudPush) window.cloudPush();
+        };
+
+        // ---- Showing/hiding parts of the page for the signed-in role ----
+        function setAuthVisible(show) {
+            document.getElementById('authScreen').classList.toggle('hidden', !show);
+            document.getElementById('appShell').classList.toggle('hidden', show);
+        }
+        function setAuthLoading(loading) {
+            document.getElementById('authLoading').classList.toggle('hidden', !loading);
+            document.getElementById('authPanel').classList.toggle('hidden', loading);
+        }
+        function showAuthError(msg) {
+            const el = document.getElementById('authError');
+            el.textContent = msg || '';
+            el.classList.toggle('hidden', !msg);
+        }
+
+        function applyRoleUI() {
+            const u = window.currentUser;
+            if (!u) return;
+            const modify = canModify();
+            const admin = isAdminRole();
+
+            document.getElementById('userName').textContent = u.fullName;
+            document.getElementById('userRole').textContent = ROLE_LABELS[u.role] || u.role;
+            document.getElementById('userChip').classList.remove('hidden');
+
+            document.getElementById('addScheduleBtn').classList.toggle('hidden', !modify);
+            document.getElementById('addBtnLabel').textContent = admin ? 'Add Schedule' : 'Propose Schedule';
+            ['monthSelect', 'yearSelect', 'date-Mon', 'date-Tue', 'date-Thu', 'date-Fri'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.disabled = !modify;
+                el.classList.toggle('opacity-60', !modify);
+                el.classList.toggle('cursor-not-allowed', !modify);
+            });
+            document.getElementById('recordsBtn').classList.toggle('hidden', !admin);
+            document.getElementById('approvalsBtn').classList.toggle('hidden', !modify);
+            document.getElementById('approvalsLabel').textContent = admin ? 'Approvals' : 'My Changes';
+
+            const msgs = [];
+            if (u.requestedRole && u.requestedRole !== u.role) {
+                msgs.push(`Your request for ${ROLE_LABELS[u.requestedRole] || u.requestedRole} access is waiting for approval by an officer.`);
+            }
+            if (u.role === 'student') msgs.push('You have view-only access to the schedule.');
+            if (u.role === 'committee') msgs.push('Your edits are sent to a Peace and Order Officer for approval before they appear on the schedule.');
+            const banner = document.getElementById('roleBanner');
+            banner.textContent = msgs.join(' ');
+            banner.classList.toggle('hidden', msgs.length === 0);
+
+            window.renderUI();
+            updateApprovalsUI();
+        }
+
+        // ---- Approvals panel ----
+        function proposalList() {
+            return Object.entries(window.proposals || {})
+                .map(([id, p]) => ({ id, ...p }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+        function pendingRoleRequests() {
+            const me = window.currentUser ? window.currentUser.uid : null;
+            return Object.entries(window.allUsers || {})
+                .filter(([uid, u]) => uid !== me && u && u.requestedRole && u.requestedRole !== u.role)
+                .map(([uid, u]) => ({ uid, ...u }));
+        }
+
+        function updateApprovalsUI() {
+            if (!window.currentUser) return;
+            let n = 0;
+            if (isAdminRole()) {
+                n = proposalList().filter(p => p.status === 'pending').length + pendingRoleRequests().length;
+            } else if (isCommitteeRole()) {
+                n = proposalList().filter(p => p.by === window.currentUser.uid && p.status === 'pending').length;
+            }
+            const badge = document.getElementById('approvalsBadge');
+            badge.textContent = n;
+            badge.classList.toggle('hidden', n === 0);
+            if (!document.getElementById('approvalsModal').classList.contains('hidden')) renderApprovals();
+        }
+
+        function openApprovals() {
+            document.getElementById('approvalsModal').classList.remove('hidden');
+            renderApprovals();
+        }
+        function closeApprovals() {
+            document.getElementById('approvalsModal').classList.add('hidden');
+        }
+
+        function parseChange(p) { try { return JSON.parse(p.json); } catch (e) { return null; } }
+
+        const CHANGE_LABEL = { add: 'Add', edit: 'Edit', delete: 'Delete', dates: 'Dates' };
+        const CHANGE_STYLE = {
+            add: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+            edit: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+            delete: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
+            dates: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+        };
+        const REVIEW_STYLE = {
+            pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+            approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+            rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+        };
+
+        function changeDetail(ch) {
+            if (ch.type === 'add') return describeItem(ch.item);
+            if (ch.type === 'delete') return describeItem(ch.before);
+            if (ch.type === 'edit') {
+                const diffs = ITEM_FIELDS
+                    .filter(k => String(ch.before[k]) !== String(ch.item[k]))
+                    .map(k => `${FIELD_LABELS[k]}: ${ch.before[k]} → ${ch.item[k]}`);
+                return `${describeItem(ch.before)}\nChanges: ${diffs.join(' · ')}`;
+            }
+            if (ch.type === 'dates') {
+                const b = ch.before || {};
+                const parts = [];
+                if (b.month !== ch.month || b.year !== ch.year) {
+                    parts.push(`Month: ${MONTH_NAMES[b.month] || '?'} ${b.year} → ${MONTH_NAMES[ch.month] || '?'} ${ch.year}`);
+                }
+                DAY_KEYS.forEach(k => {
+                    const o = (b.dayDates || {})[k], n = (ch.dayDates || {})[k];
+                    if (o !== n) parts.push(`${k}: ${o || 'none'} → ${n || 'none'}`);
+                });
+                return parts.join('\n') || 'Change the week dates';
+            }
+            return '';
+        }
+
+        function proposalCard(p, mode) {
+            const ch = parseChange(p);
+            if (!ch) return '';
+            const when = p.createdAt ? new Date(p.createdAt).toLocaleString() : '';
+            const who = mode === 'review'
+                ? `<span class="font-bold">${esc(p.byName)}</span> <span class="text-slate-400">(${esc(p.byStudentNumber || '')})</span> · `
+                : '';
+            const right = mode === 'review'
+                ? `<div class="flex gap-2 shrink-0">
+                       <button onclick="approveProposal('${esc(p.id)}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold">Approve</button>
+                       <button onclick="rejectProposal('${esc(p.id)}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold">Reject</button>
+                   </div>`
+                : `<span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${REVIEW_STYLE[p.status] || ''}">${esc(p.status)}</span>`;
+            const reviewed = mode === 'mine' && p.reviewedByName && p.status !== 'pending'
+                ? `<div class="text-[10px] text-slate-400 mt-1">Reviewed by ${esc(p.reviewedByName)}</div>` : '';
+            return `
+                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${CHANGE_STYLE[ch.type] || ''}">${esc(CHANGE_LABEL[ch.type] || ch.type)}</span>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400">${who}${esc(when)}</span>
+                        </div>
+                        <div class="text-xs font-semibold text-slate-700 dark:text-slate-200 whitespace-pre-line break-words">${esc(changeDetail(ch))}</div>
+                        ${reviewed}
+                    </div>
+                    ${right}
+                </div>`;
+        }
+
+        function renderApprovals() {
+            const body = document.getElementById('approvalsBody');
+            const title = document.getElementById('approvalsTitle');
+            if (isAdminRole()) {
+                title.textContent = 'Approvals';
+                const roles = pendingRoleRequests();
+                const pending = proposalList().filter(p => p.status === 'pending');
+                body.innerHTML = `
+                    <section>
+                        <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Account requests (${roles.length})</h4>
+                        <div class="space-y-2">
+                            ${roles.length === 0 ? '<p class="text-xs text-slate-400 italic">No pending account requests.</p>' : roles.map(u => `
+                                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(u.fullName)}</div>
+                                        <div class="text-[11px] text-slate-500 dark:text-slate-400">${esc(u.studentNumber)} · wants <b>${esc(ROLE_LABELS[u.requestedRole] || u.requestedRole)}</b> (now ${esc(ROLE_LABELS[u.role] || u.role)})</div>
+                                    </div>
+                                    <div class="flex gap-2 shrink-0">
+                                        <button onclick="approveRole('${esc(u.uid)}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold">Approve</button>
+                                        <button onclick="rejectRole('${esc(u.uid)}')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold">Reject</button>
+                                    </div>
+                                </div>`).join('')}
+                        </div>
+                    </section>
+                    <section>
+                        <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Schedule changes from the Disciplinary Committee (${pending.length})</h4>
+                        <div class="space-y-2">
+                            ${pending.length === 0 ? '<p class="text-xs text-slate-400 italic">No pending schedule changes.</p>' : pending.map(p => proposalCard(p, 'review')).join('')}
+                        </div>
+                    </section>`;
+            } else {
+                title.textContent = 'My Submitted Changes';
+                const mine = proposalList().filter(p => p.by === window.currentUser.uid).slice(0, 30);
+                body.innerHTML = `
+                    <section>
+                        <div class="space-y-2">
+                            ${mine.length === 0 ? '<p class="text-xs text-slate-400 italic">You have not submitted any changes yet.</p>' : mine.map(p => proposalCard(p, 'mine')).join('')}
+                        </div>
+                    </section>`;
+            }
+        }
+
+        function approveProposal(pid) {
+            if (!isAdminRole()) return;
+            const p = (window.proposals || {})[pid];
+            if (!p || p.status !== 'pending') return;
+            const ch = parseChange(p);
+            if (!ch) return;
+            if (!applyChangeToState(ch)) {
+                showToast('That entry no longer exists, so the change was rejected.', 'error');
+                window.cloudReviewProposal(pid, 'rejected').catch(() => {});
+                return;
+            }
+            window.saveStateToCloud();
+            window.renderUI();
+            window.cloudReviewProposal(pid, 'approved').then(
+                () => showToast('Change approved and added to the schedule.', 'success'),
+                () => showToast('The schedule was updated but the request could not be marked as approved.', 'error')
+            );
+        }
+
+        function rejectProposal(pid) {
+            if (!isAdminRole()) return;
+            const p = (window.proposals || {})[pid];
+            const ch = p ? parseChange(p) : null;
+            askConfirm({
+                title: 'Reject Change',
+                message: `Reject this change${p ? ` from ${p.byName}` : ''}? It will not be added to the schedule.${ch ? `\n\n${changeDetail(ch)}` : ''}`,
+                confirmText: 'Yes, Reject',
+                onConfirm: () => window.cloudReviewProposal(pid, 'rejected').then(
+                    () => showToast('Change rejected.', 'success'),
+                    () => showToast('Could not reject the change. Please try again.', 'error'))
+            });
+        }
+
+        function approveRole(uid) {
+            if (!isAdminRole()) return;
+            const u = (window.allUsers || {})[uid];
+            if (!u) return;
+            askConfirm({
+                title: 'Approve Access',
+                message: `Give ${u.fullName} (${u.studentNumber}) ${ROLE_LABELS[u.requestedRole] || u.requestedRole} access?`,
+                confirmText: 'Yes, Approve',
+                danger: false,
+                onConfirm: () => window.cloudReviewUser(uid, true).then(
+                    () => showToast('Access approved.', 'success'),
+                    () => showToast('Could not update the account. Please try again.', 'error'))
+            });
+        }
+
+        function rejectRole(uid) {
+            if (!isAdminRole()) return;
+            const u = (window.allUsers || {})[uid];
+            if (!u) return;
+            askConfirm({
+                title: 'Reject Request',
+                message: `Reject ${u.fullName}'s request for ${ROLE_LABELS[u.requestedRole] || u.requestedRole} access? They will stay as ${ROLE_LABELS[u.role] || u.role}.`,
+                confirmText: 'Yes, Reject',
+                onConfirm: () => window.cloudReviewUser(uid, false).then(
+                    () => showToast('Request rejected.', 'success'),
+                    () => showToast('Could not update the account. Please try again.', 'error'))
+            });
+        }
+
+        // ---- Login / sign-up forms ----
+        function normalizeStudentNumber(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
+        function validStudentNumber(sn) { return /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(sn) && sn.length >= 5 && sn.length <= 30; }
+
+        function setAuthMode(mode) {
+            const login = mode === 'login';
+            document.getElementById('loginForm').classList.toggle('hidden', !login);
+            document.getElementById('signupForm').classList.toggle('hidden', login);
+            const on = 'bg-[#2E1A47] text-[#FFD700] shadow';
+            const off = 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white';
+            document.getElementById('tabLogin').className = 'flex-1 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wide transition ' + (login ? on : off);
+            document.getElementById('tabSignup').className = 'flex-1 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wide transition ' + (login ? off : on);
+            showAuthError('');
+        }
+
+        async function submitLogin(e) {
+            e.preventDefault();
+            if (!window.authApi) { showAuthError('Still connecting to the server. Please try again in a moment.'); return; }
+            const sn = normalizeStudentNumber(document.getElementById('loginSN').value);
+            const pw = document.getElementById('loginPw').value;
+            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-24-01294-A.'); return; }
+            if (!pw) { showAuthError('Enter your password.'); return; }
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = true; btn.classList.add('opacity-60');
+            showAuthError('');
+            try {
+                await window.authApi.login(sn, pw);
+            } catch (err) {
+                showAuthError(window.authApi.friendlyError(err));
+            } finally {
+                btn.disabled = false; btn.classList.remove('opacity-60');
+            }
+        }
+
+        async function submitSignup(e) {
+            e.preventDefault();
+            if (!window.authApi) { showAuthError('Still connecting to the server. Please try again in a moment.'); return; }
+            const fullName = document.getElementById('signupName').value.trim().replace(/\s+/g, ' ');
+            const sn = normalizeStudentNumber(document.getElementById('signupSN').value);
+            const role = document.getElementById('signupRole').value;
+            const pw = document.getElementById('signupPw').value;
+            const pw2 = document.getElementById('signupPw2').value;
+            if (fullName.length < 5 || !fullName.includes(' ')) { showAuthError('Enter your full name (first and last name).'); return; }
+            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-24-01294-A.'); return; }
+            if (!ROLE_LABELS[role]) { showAuthError('Choose a role.'); return; }
+            if (pw.length < 8) { showAuthError('Your password must be at least 8 characters.'); return; }
+            if (pw !== pw2) { showAuthError('The two passwords do not match.'); return; }
+            const btn = document.getElementById('signupBtn');
+            btn.disabled = true; btn.classList.add('opacity-60');
+            showAuthError('');
+            try {
+                await window.authApi.signup({ fullName, studentNumber: sn, role, password: pw });
+            } catch (err) {
+                showAuthError(window.authApi.friendlyError(err));
+            } finally {
+                btn.disabled = false; btn.classList.remove('opacity-60');
+            }
+        }
+
+
+        window.addEventListener('DOMContentLoaded', () => {
+            populateSelects();
+            loadFromLocalCache();
+            window.cloudBaseline = JSON.parse(JSON.stringify(sharedState()));
+            window.renderUI();
+            window.appReady = true;
+            if (window.cloudStart) window.cloudStart();
+            // If the server cannot be reached, stop showing "Checking your session..."
+            setTimeout(() => {
+                if (!window.authChecked) {
+                    setAuthLoading(false);
+                    showAuthError('Cannot reach the server. Check your internet connection and refresh the page.');
+                }
+            }, 10000);
+        });
+    </script>
+
+    <!-- FIREBASE: LOGIN (Authentication) + LIVE SYNC (Realtime Database) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getDatabase, ref, onValue, set, update, push as dbPush, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+        // ============================================================
+        // FIREBASE CONFIG
+        // Best place to fill this in: the separate file firebase-config.js (next to index.html).
+        // That file is read first, so you only set it up once and updating index.html never erases it.
+        // ============================================================
+        let firebaseConfig = {
+            apiKey: "PASTE_API_KEY",
+            authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+            databaseURL: "PASTE_DATABASE_URL",
+            projectId: "PASTE_PROJECT_ID",
+            appId: "PASTE_APP_ID"
+        };
+        try {
+            const external = await import('./firebase-config.js');
+            if (external && external.default) firebaseConfig = external.default;
+        } catch (e) { /* no firebase-config.js found: the values above are used */ }
+
+        // Students sign in with their student number; behind the scenes it becomes a login "email".
+        // No real email is ever sent or needed.
+        const EMAIL_DOMAIN = '@plmar-criminology.app';
+        const normSN = v => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
+        const toEmail = sn => normSN(sn).toLowerCase() + EMAIL_DOMAIN;
+
+        const clientId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        const room = () => window.currentSessionId;
+
+        let app, auth, db, roomRef = null;
+        let pushTimer = null;
+        let signingUp = false;
+        let enteredUid = null;
+        let profileUnsub = null;
+        let baseUnsubs = [];
+        let roleUnsubs = [];
+        let activeRole = null;
+
+        function friendlyError(err) {
+            const code = (err && err.code) || '';
+            const map = {
+                'auth/invalid-credential': 'Incorrect student number or password.',
+                'auth/wrong-password': 'Incorrect student number or password.',
+                'auth/user-not-found': 'Incorrect student number or password.',
+                'auth/invalid-email': 'That student number is not valid.',
+                'auth/email-already-in-use': 'This student number is already registered. Please log in instead.',
+                'auth/weak-password': 'Your password is too weak. Use at least 8 characters.',
+                'auth/network-request-failed': 'No internet connection. Please try again.',
+                'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
+                'auth/operation-not-allowed': 'Sign-in is not turned on yet. In Firebase, enable Authentication > Sign-in method > Email/Password.',
+                'auth/configuration-not-found': 'Sign-in is not turned on yet. In Firebase, open Authentication and click Get started, then enable Email/Password.',
+                'app/not-configured': 'Firebase is not set up yet. Fill in firebase-config.js first.'
+            };
+            if (map[code]) return map[code];
+            if (String((err && err.message) || '').includes('PERMISSION_DENIED')) {
+                return 'The database refused this. Make sure the security rules from the setup steps are published.';
+            }
+            return 'Something went wrong. Please try again.';
+        }
+
+        // ---------- Sign up / log in / log out ----------
+        async function signup({ fullName, studentNumber, role, password }) {
+            const sn = normSN(studentNumber);
+            signingUp = true;
+            let cred = null;
+            try {
+                cred = await createUserWithEmailAndPassword(auth, toEmail(sn), password);
+                // Everyone starts as a Student (viewer). The role they asked for waits for an officer's approval.
+                await set(ref(db, 'users/' + cred.user.uid), {
+                    fullName,
+                    studentNumber: sn,
+                    role: 'student',
+                    requestedRole: role,
+                    createdAt: serverTimestamp()
+                });
+            } catch (err) {
+                if (cred) { try { await deleteUser(cred.user); } catch (e) { /* ignore */ } }
+                signingUp = false;
+                throw err;
+            }
+            signingUp = false;
+            enterApp(cred.user);
+        }
+
+        async function login(studentNumber, password) {
+            await signInWithEmailAndPassword(auth, toEmail(studentNumber), password);
+            // onAuthStateChanged takes it from here
+        }
+
+        async function logout() {
+            try { await signOut(auth); } finally { location.reload(); }
+        }
+
+        // ---------- After sign-in ----------
+        function enterApp(user) {
+            if (enteredUid === user.uid) return;
+            enteredUid = user.uid;
+            profileUnsub = onValue(ref(db, 'users/' + user.uid), (snap) => {
+                const p = snap.val();
+                if (!p) {
+                    if (signingUp) return;
+                    failSignIn('Your account is incomplete. Ask an officer to remove it, then sign up again.');
+                    return;
+                }
+                window.currentUser = { uid: user.uid, ...p };
+                setAuthVisible(false);
+                applyRoleUI();
+                startRoom();
+                startRoleListeners(p.role);
+            }, (err) => {
+                console.warn('Profile error:', err);
+                failSignIn(friendlyError(err));
+            });
+        }
+
+        function teardown() {
+            if (profileUnsub) { profileUnsub(); profileUnsub = null; }
+            baseUnsubs.forEach(u => u()); baseUnsubs = [];
+            roleUnsubs.forEach(u => u()); roleUnsubs = [];
+            roomRef = null; activeRole = null; enteredUid = null;
+            window.currentUser = null; window.allUsers = {}; window.proposals = {};
+        }
+
+        function failSignIn(message) {
+            teardown();
+            signOut(auth).catch(() => {});
+            setAuthVisible(true);
+            setAuthLoading(false);
+            showAuthError(message);
+        }
+
+        // ---------- Live schedule ----------
+        function startRoom() {
+            if (roomRef) return;
+            roomRef = ref(db, `rooms/${room()}`);
+
+            baseUnsubs.push(onValue(roomRef, (snap) => {
+                window.cloudConnected = true;
+                const val = snap.val();
+
+                if (!val || !val.json) {
+                    // Nothing stored yet: an officer/executive seeds it with the current schedule
+                    if (isAdminRole()) push();
+                    else updateSyncBadge(true, "Cloud Sync Active");
+                    return;
+                }
+                let cloudState = null;
+                try { cloudState = JSON.parse(val.json); } catch (e) { console.warn('Bad data from cloud:', e); }
+                if (cloudState) {
+                    window.cloudBaseline = cloudState;
+                    // Ignore the echo of our own save
+                    if (val.writer !== clientId) {
+                        applyState(JSON.parse(val.json));
+                        saveToLocalCache();
+                        window.renderUI();
+                    }
+                }
+                updateSyncBadge(true, "Cloud Sync Active");
+            }, (err) => {
+                console.warn('Firebase read error:', err);
+                updateSyncBadge(false, "Offline – Cached Locally");
+            }));
+
+            baseUnsubs.push(onValue(ref(db, '.info/connected'), (snap) => {
+                if (!window.cloudConnected) return;
+                updateSyncBadge(snap.val() === true, snap.val() === true ? "Cloud Sync Active" : "Offline – Cached Locally");
+            }));
+        }
+
+        // Debounced write of the whole schedule (officers/executives only; the database rules enforce this too)
+        function push() {
+            if (!roomRef || !isAdminRole()) return;
+            clearTimeout(pushTimer);
+            updateSyncBadge(null, "Syncing...");
+            pushTimer = setTimeout(() => {
+                set(roomRef, {
+                    json: JSON.stringify(sharedState()),
+                    writer: clientId,
+                    updatedAt: serverTimestamp()
+                }).then(() => {
+                    updateSyncBadge(true, "Cloud Sync Active");
+                }).catch((err) => {
+                    console.warn('Firebase write error (cached locally):', err);
+                    updateSyncBadge(false, "Cached Locally");
+                    showToast('Could not save to the cloud. Your change was not shared.', 'error');
+                });
+            }, 250);
+        }
+
+        // ---------- Role-specific live lists ----------
+        function startRoleListeners(role) {
+            if (role === activeRole) return;
+            activeRole = role;
+            roleUnsubs.forEach(u => u()); roleUnsubs = [];
+            const admin = role === 'executive' || role === 'officer';
+
+            if (admin) {
+                roleUnsubs.push(onValue(ref(db, 'users'), (s) => {
+                    window.allUsers = s.val() || {};
+                    updateApprovalsUI();
+                }, (e) => console.warn('Users list error:', e)));
+            } else {
+                window.allUsers = {};
+            }
+
+            if (admin || role === 'committee') {
+                roleUnsubs.push(onValue(ref(db, `proposals/${room()}`), (s) => {
+                    window.proposals = s.val() || {};
+                    updateApprovalsUI();
+                }, (e) => console.warn('Proposals list error:', e)));
+            } else {
+                window.proposals = {};
+            }
+            updateApprovalsUI();
+        }
+
+        // ---------- Calls used by the page ----------
+        window.cloudPropose = async (changes) => {
+            const cu = window.currentUser;
+            await Promise.all(changes.map(ch => {
+                const r = dbPush(ref(db, `proposals/${room()}`));
+                return set(r, {
+                    json: JSON.stringify(ch),
+                    type: ch.type,
+                    by: cu.uid,
+                    byName: cu.fullName,
+                    byStudentNumber: cu.studentNumber,
+                    status: 'pending',
+                    createdAt: serverTimestamp()
+                });
+            }));
+        };
+
+        window.cloudReviewProposal = (pid, status) => {
+            const cu = window.currentUser;
+            return update(ref(db, `proposals/${room()}/${pid}`), {
+                status,
+                reviewedBy: cu.uid,
+                reviewedByName: cu.fullName,
+                reviewedAt: serverTimestamp()
+            });
+        };
+
+        window.cloudReviewUser = (uid, approve) => {
+            const u = (window.allUsers || {})[uid];
+            if (!u) return Promise.reject(new Error('Unknown account'));
+            return update(ref(db, 'users/' + uid), approve ? { role: u.requestedRole } : { requestedRole: u.role });
+        };
+
+        window.cloudPush = push;
+
+        // ---------- Start ----------
+        function start() {
+            if (Object.values(firebaseConfig).some(v => String(v).startsWith('PASTE_'))) {
+                const notReady = async () => { const e = new Error('not configured'); e.code = 'app/not-configured'; throw e; };
+                window.authApi = { login: notReady, signup: notReady, logout: () => {}, friendlyError };
+                window.authChecked = true;
+                setAuthLoading(false);
+                showAuthError('Firebase is not set up yet. Fill in firebase-config.js with your Firebase details.');
+                return;
+            }
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getDatabase(app);
+            } catch (err) {
+                console.warn('Firebase init error:', err);
+                window.authChecked = true;
+                setAuthLoading(false);
+                showAuthError('Could not start Firebase. Check the values in firebase-config.js.');
+                return;
+            }
+            window.authApi = { login, signup, logout, friendlyError };
+            onAuthStateChanged(auth, (user) => {
+                window.authChecked = true;
+                if (signingUp) return;
+                if (user) {
+                    enterApp(user);
+                } else {
+                    teardown();
+                    setAuthLoading(false);
+                    setAuthVisible(true);
+                }
+            });
+        }
+
+        window.cloudStart = start;
+        if (window.appReady) start();
+    </script>
+
+    <script>
+        // Populate Select Controls
+        function populateSelects() {
+            // Populate Year (2026 to 2050)
+            const yearSel = document.getElementById('yearSelect');
+            yearSel.innerHTML = '';
+            for (let y = 2026; y <= 2050; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                yearSel.appendChild(opt);
+            }
+
+            // Populate NATO Sections (Alpha to Zulu)
+            const secSel = document.getElementById('itemSection');
+            secSel.innerHTML = '';
+            const nato = [
+                "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", 
+                "India", "Juliett", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", 
+                "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-ray", "Yankee", "Zulu"
+            ];
+            nato.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                secSel.appendChild(opt);
+            });
+
+            // Hours & Minutes Selectors
+            const hSel = document.getElementById('timeHour');
+            hSel.innerHTML = '';
+            for (let h = 1; h <= 12; h++) {
+                const opt = document.createElement('option');
+                const val = h < 10 ? '0' + h : '' + h;
+                opt.value = val;
+                opt.textContent = val;
+                hSel.appendChild(opt);
+            }
+
+            const mSel = document.getElementById('timeMin');
+            mSel.innerHTML = '';
+            for (let m = 0; m < 60; m += 5) {
+                const opt = document.createElement('option');
+                const val = m < 10 ? '0' + m : '' + m;
+                opt.value = val;
+                opt.textContent = val;
+                mSel.appendChild(opt);
+            }
+        }
+
+        // Render UI Main Entry Point
+        window.renderUI = function() {
+            const state = window.appState;
+
+            document.getElementById('monthSelect').value = state.month;
+            document.getElementById('yearSelect').value = state.year;
+
+            ['Mon', 'Tue', 'Thu', 'Fri'].forEach(d => {
+                const el = document.getElementById(`date-${d}`);
+                if (el && state.dayDates[d]) {
+                    el.value = state.dayDates[d];
+                }
+            });
+
+            updateMetrics();
+            renderFilterBar();
+            renderGrid();
+            renderList();
+            renderSnapshots();
+        };
+
+        // Render Grid View with Dynamic Chronological Column Reordering
+        function renderGrid() {
+            const container = document.getElementById('gridView');
+            container.innerHTML = '';
+
+            const dayKeys = ['Mon', 'Tue', 'Thu', 'Fri'];
+
+            // Chronologically sort day columns based on selected dates
+            const sortedDays = dayKeys.map(k => {
+                return { key: k, dateStr: window.appState.dayDates[k] || '9999-99-99' };
+            }).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+            sortedDays.forEach(({ key, dateStr }) => {
+                const formattedDate = dateStr !== '9999-99-99' ? formatDate(dateStr) : 'No Date Set';
+
+                // Filter items for this day & sort by time
+                const items = getFilteredItems()
+                    .filter(i => i.day === key)
+                    .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+
+                const col = document.createElement('div');
+                col.className = 'bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden';
+
+                col.innerHTML = `
+                    <div class="bg-[#2E1A47] text-white p-3 border-b-2 border-[#FFD700] flex justify-between items-center">
+                        <div>
+                            <span class="font-black text-sm text-[#FFD700] uppercase tracking-wider">${getDayFullName(key)}</span>
+                            <span class="block text-[11px] font-bold text-slate-300">${formattedDate}</span>
+                        </div>
+                        <span class="bg-amber-400/20 text-[#FFD700] px-2 py-0.5 rounded-full text-xs font-bold border border-amber-400/30">${items.length}</span>
+                    </div>
+                    <div class="p-3 flex-1 space-y-3 custom-scrollbar overflow-y-auto max-h-[600px] bg-slate-50/50 dark:bg-slate-900/30">
+                        ${items.length === 0 ? `
+                            <div class="text-center py-8 text-slate-400 dark:text-slate-500 text-xs italic">
+                                ${hasActiveFilters() ? 'No matching inspections' : 'No inspections scheduled for this day'}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                const cardList = col.querySelector('.custom-scrollbar');
+                items.forEach(item => {
+                    cardList.appendChild(createInspectionCard(item));
+                });
+
+                container.appendChild(col);
+            });
+        }
+
+        // Create Individual Inspection Card with Year-Level Styling
+        function createInspectionCard(item) {
+            const card = document.createElement('div');
+
+            // Specific year level colors & borders
+            const colorThemeMap = {
+                1: 'border-l-4 border-[#1e88e5] bg-blue-50/60 dark:bg-blue-950/20 text-blue-900 dark:text-blue-200',
+                2: 'border-l-4 border-[#8e24aa] bg-purple-50/60 dark:bg-purple-950/20 text-purple-900 dark:text-purple-200',
+                3: 'border-l-4 border-[#f57f17] bg-amber-50/60 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200',
+                4: 'border-l-4 border-[#d84315] bg-orange-50/60 dark:bg-orange-950/20 text-orange-900 dark:text-orange-200'
+            };
+
+            card.className = `p-3.5 rounded-lg border border-slate-200 dark:border-slate-700/80 shadow-sm hover:shadow-md transition relative ${colorThemeMap[item.year] || ''}`;
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="font-black text-xs uppercase tracking-wide flex items-center">
+                        <svg class="shrink-0 mr-1.5 opacity-70" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> ${ordinal(item.year)} Year - Sec ${item.section}
+                    </span>
+                    ${statusPicker(item)}
+                </div>
+                <div class="space-y-1 text-xs font-bold text-slate-700 dark:text-slate-300 mb-3">
+                    <div class="flex items-center"><svg class="shrink-0 w-4 text-purple-600 dark:text-purple-400" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${item.time}</div>
+                    <div class="flex items-center"><svg class="shrink-0 w-4 text-rose-500" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${item.room}</div>
+                </div>
+                <div data-actions class="flex justify-end space-x-1 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <button onclick="editItem('${item.id}')" class="p-1 px-2 text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-200/50 dark:hover:bg-purple-900/50 rounded transition">
+                        <svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit
+                    </button>
+                    <button onclick="deleteItem('${item.id}')" class="p-1 px-2 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-200/50 dark:hover:bg-rose-900/50 rounded transition">
+                        <svg class="shrink-0 mr-1" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete
+                    </button>
+                </div>
+            `;
+            if (!canModify()) card.querySelector('[data-actions]')?.remove();
+            return card;
+        }
+
+        const STATUS_OPTIONS = ['Pending', 'In Progress', 'Done', 'Cancelled'];
+        const STATUS_STYLE = {
+            'Pending': 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300',
+            'In Progress': 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border-blue-300',
+            'Done': 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300',
+            'Cancelled': 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-300'
+        };
+
+        // Clickable status pill: changing it updates the schedule directly (no Edit modal needed)
+        function statusPicker(item) {
+            if (!canModify()) {
+                return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[item.status] || ''}">${esc(item.status)}</span>`;
+            }
+            const options = STATUS_OPTIONS.map(s =>
+                `<option value="${s}" ${s === item.status ? 'selected' : ''} class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">${s}</option>`
+            ).join('');
+            return `<select onchange="setItemStatus('${item.id}', this.value)" title="Click to change status"
+                class="text-[10px] font-bold pl-2 pr-1 py-0.5 rounded-full border cursor-pointer outline-none focus:ring-2 focus:ring-purple-500 ${STATUS_STYLE[item.status] || ''}">${options}</select>`;
+        }
+
+        function setItemStatus(id, status) {
+            if (!canModify()) return;
+            if (!STATUS_OPTIONS.includes(status)) return;
+            const item = (window.appState.items || []).find(i => i.id === id);
+            if (!item || item.status === status) return;
+            item.status = status;
+            window.saveStateToCloud();
+            window.renderUI();
+        }
+
+        // Search & filters are per-browser view settings, so they are kept out of the synced appState
+        const uiFilters = { search: '', year: 'all', status: 'all' };
+
+        function hasActiveFilters() {
+            return uiFilters.search.trim() !== '' || uiFilters.year !== 'all' || uiFilters.status !== 'all';
+        }
+
+        function getFilteredItems() {
+            const terms = uiFilters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            return (window.appState.items || []).filter(i => {
+                if (uiFilters.year !== 'all' && String(i.year) !== uiFilters.year) return false;
+                if (uiFilters.status !== 'all' && i.status !== uiFilters.status) return false;
+                if (terms.length === 0) return true;
+                const haystack = [
+                    i.day, getDayFullName(i.day), formatDate(window.appState.dayDates[i.day]),
+                    i.time, `${ordinal(i.year)} year`, `year ${i.year}`,
+                    i.section, `section ${i.section}`, `sec ${i.section}`, i.room, i.status
+                ].join(' ').toLowerCase();
+                return terms.every(t => haystack.includes(t));
+            });
+        }
+
+        function setSearch(value) {
+            uiFilters.search = value;
+            refreshFilteredViews();
+        }
+
+        function setYearFilter(year) {
+            uiFilters.year = year;
+            refreshFilteredViews();
+        }
+
+        function setStatusFilter(status) {
+            uiFilters.status = status;
+            refreshFilteredViews();
+        }
+
+        function clearFilters() {
+            uiFilters.search = '';
+            uiFilters.year = 'all';
+            uiFilters.status = 'all';
+            document.getElementById('searchInput').value = '';
+            refreshFilteredViews();
+        }
+
+        function refreshFilteredViews() {
+            renderFilterBar();
+            renderGrid();
+            renderList();
+        }
+
+        function renderFilterBar() {
+            const items = window.appState.items || [];
+            const pill = (active, activeCls, label, count, onclick) => `
+                <button onclick="${onclick}" class="px-2.5 py-1 rounded-full border transition ${active ? activeCls : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-purple-500'}">
+                    ${label} <span class="opacity-70">(${count})</span>
+                </button>`;
+            const allCls = 'bg-[#2E1A47] border-[#2E1A47] text-[#FFD700] shadow';
+
+            const yearCls = {
+                1: 'bg-[#1e88e5] border-[#1e88e5] text-white shadow',
+                2: 'bg-[#8e24aa] border-[#8e24aa] text-white shadow',
+                3: 'bg-[#f57f17] border-[#f57f17] text-white shadow',
+                4: 'bg-[#d84315] border-[#d84315] text-white shadow'
+            };
+            document.getElementById('yearFilterBtns').innerHTML =
+                pill(uiFilters.year === 'all', allCls, 'All', items.length, "setYearFilter('all')") +
+                [1, 2, 3, 4].map(y => pill(uiFilters.year === String(y), yearCls[y], `${ordinal(y)} Year`,
+                    items.filter(i => i.year === y).length, `setYearFilter('${y}')`)).join('');
+
+            const statusCls = {
+                'Pending': 'bg-amber-400 border-amber-400 text-amber-950 shadow',
+                'In Progress': 'bg-blue-500 border-blue-500 text-white shadow',
+                'Done': 'bg-emerald-500 border-emerald-500 text-white shadow',
+                'Cancelled': 'bg-rose-500 border-rose-500 text-white shadow'
+            };
+            document.getElementById('statusFilterBtns').innerHTML =
+                pill(uiFilters.status === 'all', allCls, 'All', items.length, "setStatusFilter('all')") +
+                STATUS_OPTIONS.map(s => pill(uiFilters.status === s, statusCls[s], s,
+                    items.filter(i => i.status === s).length, `setStatusFilter('${s}')`)).join('');
+
+            const active = hasActiveFilters();
+            document.getElementById('clearFiltersBtn').classList.toggle('hidden', !active);
+            document.getElementById('filterResultCount').textContent = active
+                ? `Showing ${getFilteredItems().length} of ${items.length} schedules`
+                : `${items.length} schedules`;
+        }
+
+        // Render List View
+        function renderList() {
+            const tbody = document.getElementById('listViewBody');
+            tbody.innerHTML = '';
+
+            const sorted = getFilteredItems().sort((a, b) => {
+                const dateA = window.appState.dayDates[a.day] || '';
+                const dateB = window.appState.dayDates[b.day] || '';
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
+            });
+
+            if (sorted.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400 italic">${hasActiveFilters() ? 'No inspections match your search or filters.' : 'No inspection entries found.'}</td></tr>`;
+                return;
+            }
+
+            sorted.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-800 dark:text-slate-200">${getDayFullName(item.day)} (${formatDate(window.appState.dayDates[item.day])})</td>
+                    <td class="p-3 font-black text-purple-700 dark:text-purple-300">${item.time}</td>
+                    <td class="p-3 font-semibold">${ordinal(item.year)} Year</td>
+                    <td class="p-3 font-extrabold">Section ${item.section}</td>
+                    <td class="p-3 font-semibold">${item.room}</td>
+                    <td class="p-3">${statusPicker(item)}</td>
+                    <td data-actions class="p-3 text-right space-x-2">
+                        <button onclick="editItem('${item.id}')" class="text-purple-600 hover:text-purple-800 dark:text-purple-400 font-bold"><svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                        <button onclick="deleteItem('${item.id}')" class="text-rose-600 hover:text-rose-800 dark:text-rose-400 font-bold"><svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+                    </td>
+                `;
+                if (!canModify()) tr.querySelector('[data-actions]').innerHTML = '';
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Monitoring Progress Calculator
+        function updateMetrics() {
+            const items = window.appState.items || [];
+            const total = items.length;
+            const pending = items.filter(i => i.status === 'Pending').length;
+            const inProgress = items.filter(i => i.status === 'In Progress').length;
+            const done = items.filter(i => i.status === 'Done').length;
+            const cancelled = items.filter(i => i.status === 'Cancelled').length;
+
+            document.getElementById('cnt-total').textContent = total;
+            document.getElementById('cnt-pending').textContent = pending;
+            document.getElementById('cnt-in-progress').textContent = inProgress;
+            document.getElementById('cnt-done').textContent = done;
+            document.getElementById('cnt-cancelled').textContent = cancelled;
+
+            if (total > 0) {
+                document.getElementById('bar-done').style.width = `${(done / total) * 100}%`;
+                document.getElementById('bar-in-progress').style.width = `${(inProgress / total) * 100}%`;
+                document.getElementById('bar-pending').style.width = `${(pending / total) * 100}%`;
+                document.getElementById('bar-cancelled').style.width = `${(cancelled / total) * 100}%`;
+            } else {
+                ['bar-done', 'bar-in-progress', 'bar-pending', 'bar-cancelled'].forEach(id => {
+                    document.getElementById(id).style.width = '0%';
+                });
+            }
+        }
+
+        // Date & Month Selection Handlers
+        function handleDateChange() {
+            if (!canModify()) return;
+            ['Mon', 'Tue', 'Thu', 'Fri'].forEach(d => {
+                const input = document.getElementById(`date-${d}`);
+                if (input && input.value) {
+                    window.appState.dayDates[d] = input.value;
+                }
+            });
+            window.saveStateToCloud();
+            renderGrid();
+            renderList();
+        }
+
+        function handleMonthYearChange() {
+            if (!canModify()) return;
+            window.appState.month = parseInt(document.getElementById('monthSelect').value);
+            window.appState.year = parseInt(document.getElementById('yearSelect').value);
+            window.saveStateToCloud();
+        }
+
+        // Modal Handlers
+        function openModal(itemId = null) {
+            if (!canModify()) return;
+            document.getElementById('modalSubmitBtn').textContent = isAdminRole() ? 'Save Schedule' : 'Submit for Approval';
+            const modal = document.getElementById('scheduleModal');
+            const form = document.getElementById('inspectionForm');
+            form.reset();
+
+            if (itemId) {
+                document.getElementById('modalTitle').textContent = "Edit Inspection Schedule";
+                const item = window.appState.items.find(i => i.id === itemId);
+                if (item) {
+                    document.getElementById('itemId').value = item.id;
+                    document.getElementById('itemDay').value = item.day;
+                    document.getElementById('itemYear').value = item.year;
+                    document.getElementById('itemSection').value = item.section;
+                    const roomSel = document.getElementById('itemRoom');
+                    if (item.room && ![...roomSel.options].some(o => o.value === item.room)) roomSel.add(new Option(item.room, item.room));
+                    roomSel.value = item.room || 'TBA';
+                    document.getElementById('itemStatus').value = item.status;
+
+                    const parts = item.time.split(' ');
+                    if (parts.length === 2) {
+                        const [hh, mm] = parts[0].split(':');
+                        document.getElementById('timeHour').value = hh;
+                        document.getElementById('timeMin').value = mm;
+                        document.getElementById('timeAmpm').value = parts[1];
+                    }
+                }
+            } else {
+                document.getElementById('modalTitle').textContent = "Add Inspection Schedule";
+                document.getElementById('itemId').value = '';
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('scheduleModal').classList.add('hidden');
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            if (!canModify()) return;
+            const id = document.getElementById('itemId').value || Date.now().toString();
+            const day = document.getElementById('itemDay').value;
+            const year = parseInt(document.getElementById('itemYear').value);
+            const section = document.getElementById('itemSection').value;
+            const room = document.getElementById('itemRoom').value.trim() || 'TBA';
+            const status = document.getElementById('itemStatus').value;
+
+            const hh = document.getElementById('timeHour').value;
+            const mm = document.getElementById('timeMin').value;
+            const ampm = document.getElementById('timeAmpm').value;
+            const time = `${hh}:${mm} ${ampm}`;
+
+            const newItem = { id, day, year, section, room, status, time };
+
+            const idx = window.appState.items.findIndex(i => i.id === id);
+            if (idx > -1) {
+                window.appState.items[idx] = newItem;
+            } else {
+                window.appState.items.push(newItem);
+            }
+
+            closeModal();
+            window.saveStateToCloud();
+            window.renderUI();
+        }
+
+        function editItem(id) {
+            openModal(id);
+        }
+
+        // Custom confirmation dialog (replaces the plain browser confirm box)
+        let confirmCallback = null;
+
+        function askConfirm({ title, message, confirmText = 'Delete', danger = true, onConfirm }) {
+            confirmCallback = onConfirm;
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            const okBtn = document.getElementById('confirmOkBtn');
+            okBtn.textContent = confirmText;
+            okBtn.className = 'px-4 py-2 rounded-lg text-xs font-bold text-white transition shadow ' +
+                (danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#2E1A47] hover:bg-purple-900');
+            document.getElementById('confirmModal').classList.remove('hidden');
+            okBtn.focus();
+        }
+
+        function closeConfirm(ok) {
+            document.getElementById('confirmModal').classList.add('hidden');
+            const cb = confirmCallback;
+            confirmCallback = null;
+            if (ok && cb) cb();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !document.getElementById('confirmModal').classList.contains('hidden')) {
+                closeConfirm(false);
+            }
+        });
+
+        function deleteItem(id) {
+            if (!canModify()) return;
+            const item = window.appState.items.find(i => i.id === id);
+            const detail = item
+                ? ` (${ordinal(item.year)} Year ${item.section}, ${getDayFullName(item.day)} ${item.time}, ${item.room})`
+                : '';
+            askConfirm({
+                title: 'Delete Inspection',
+                message: `Are you sure you want to delete this inspection entry${detail}? This cannot be undone.`,
+                confirmText: 'Yes, Delete',
+                onConfirm: () => {
+                    window.appState.items = window.appState.items.filter(i => i.id !== id);
+                    window.saveStateToCloud();
+                    window.renderUI();
+                }
+            });
+        }
+
+        // Snapshot History Engine
+        function saveCurrentSnapshot() {
+            if (!isAdminRole()) return;
+            const label = prompt("Enter a label for this backup snapshot:", `Snapshot ${new Date().toLocaleDateString()}`);
+            if (!label) return;
+
+            const snap = {
+                id: Date.now().toString(),
+                label,
+                timestamp: new Date().toLocaleString(),
+                items: JSON.parse(JSON.stringify(window.appState.items)),
+                dayDates: JSON.parse(JSON.stringify(window.appState.dayDates))
+            };
+
+            if (!window.appState.snapshots) window.appState.snapshots = [];
+            window.appState.snapshots.unshift(snap);
+            window.saveStateToCloud();
+            renderSnapshots();
+        }
+
+        function renderSnapshots() {
+            const container = document.getElementById('snapshotList');
+            container.innerHTML = '';
+            const snapshots = window.appState.snapshots || [];
+
+            if (snapshots.length === 0) {
+                container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">No historical snapshots saved.</p>`;
+                return;
+            }
+
+            snapshots.forEach(s => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs space-y-2";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="font-extrabold text-slate-800 dark:text-slate-200">${s.label}</span>
+                        <span class="text-[10px] text-slate-400">${s.timestamp}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">${s.items.length} Items recorded</p>
+                    <div class="flex justify-end space-x-2 pt-1">
+                        <button onclick="restoreSnapshot('${s.id}')" class="px-2 py-1 bg-purple-600 text-white rounded text-[10px] font-bold hover:bg-purple-700">Restore</button>
+                        <button onclick="deleteSnapshot('${s.id}')" class="px-2 py-1 bg-rose-600 text-white rounded text-[10px] font-bold hover:bg-rose-700">Delete</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function restoreSnapshot(snapId) {
+            if (!isAdminRole()) return;
+            const snap = window.appState.snapshots.find(s => s.id === snapId);
+            if (!snap) return;
+            askConfirm({
+                title: 'Restore Snapshot',
+                message: `Restore the snapshot "${snap.label}"? This will replace the current schedule.`,
+                confirmText: 'Yes, Restore',
+                danger: false,
+                onConfirm: () => {
+                    window.appState.items = JSON.parse(JSON.stringify(snap.items));
+                    if (snap.dayDates) window.appState.dayDates = JSON.parse(JSON.stringify(snap.dayDates));
+                    window.saveStateToCloud();
+                    window.renderUI();
+                    toggleSidebar();
+                }
+            });
+        }
+
+        function deleteSnapshot(snapId) {
+            if (!isAdminRole()) return;
+            const snap = window.appState.snapshots.find(s => s.id === snapId);
+            askConfirm({
+                title: 'Delete Snapshot',
+                message: `Are you sure you want to delete the snapshot${snap ? ` "${snap.label}"` : ''}? This cannot be undone.`,
+                confirmText: 'Yes, Delete',
+                onConfirm: () => {
+                    window.appState.snapshots = window.appState.snapshots.filter(s => s.id !== snapId);
+                    window.saveStateToCloud();
+                    renderSnapshots();
+                }
+            });
+        }
+
+        // Share Live Session Link across Browsers
+        function shareLiveSession() {
+            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${window.currentSessionId}`;
+            
+            // Clipboard fallback
+            const temp = document.createElement('textarea');
+            temp.value = shareUrl;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+
+            alert(`Live multi-browser sync link copied to clipboard!\n\nAnyone who opens this link has to log in first. Their role decides whether they can only view the schedule or also edit it:\n${shareUrl}`);
+        }
+
+        // Export Functionality
+        function exportData(format) {
+            toggleExportDropdown();
+
+            const items = [...(window.appState.items || [])].sort((a, b) => {
+                const dateA = window.appState.dayDates[a.day] || '';
+                const dateB = window.appState.dayDates[b.day] || '';
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time);
+            });
+
+            if (items.length === 0) {
+                alert('There are no inspection entries to export.');
+                return;
+            }
+
+            const headers = ['Day', 'Date', 'Time', 'Year Level', 'Section', 'Room', 'Status'];
+            const rows = items.map(i => [
+                getDayFullName(i.day),
+                formatDateLong(window.appState.dayDates[i.day]),
+                i.time || '',
+                `${ordinal(i.year)} Year`,
+                `Section ${i.section}`,
+                i.room || 'TBA',
+                i.status || ''
+            ]);
+            const baseName = 'PLMar_Criminology_Inspection_Schedule';
+
+            if (format === 'xlsx') {
+                const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+                worksheet['!cols'] = headers.map((h, c) => ({
+                    wch: Math.max(h.length, ...rows.map(r => String(r[c]).length)) + 2
+                }));
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Inspection Schedule');
+                XLSX.writeFile(workbook, `${baseName}.xlsx`);
+            } else if (format === 'csv') {
+                const csvCell = v => {
+                    const str = String(v ?? '');
+                    return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+                };
+                const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+                // BOM so Excel opens the file as UTF-8
+                downloadBlob(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }), `${baseName}.csv`);
+            } else if (format === 'docs') {
+                const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+                const monthLabel = new Date(window.appState.year, window.appState.month, 1)
+                    .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                const cellStyle = 'border:1px solid #999; padding:5px 8px; font-size:10pt;';
+                const headCells = headers.map(h => `<th style="${cellStyle} background:#2E1A47; color:#FFD700; text-align:left;">${esc(h)}</th>`).join('');
+                const bodyRows = rows.map(r => `<tr>${r.map(v => `<td style="${cellStyle}">${esc(v)}</td>`).join('')}</tr>`).join('');
+
+                const docContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head><meta charset='utf-8'><title>PLMar Inspection Schedule</title></head>
+                <body style="font-family: Arial, sans-serif;">
+                <h2 style="color:#2E1A47; margin:0;">PAMANTASAN NG LUNGSOD NG MARIKINA</h2>
+                <h3 style="margin:4px 0;">College of Criminology - Inspection Schedule Report</h3>
+                <p style="margin:0 0 10px 0; font-size:10pt;">${esc(monthLabel)} &bull; ${rows.length} inspection(s) &bull; Generated ${esc(new Date().toLocaleString())}</p>
+                <table style="border-collapse:collapse; width:100%;">
+                <thead><tr>${headCells}</tr></thead>
+                <tbody>${bodyRows}</tbody>
+                </table></body></html>`;
+
+                downloadBlob(new Blob(['﻿', docContent], { type: 'application/msword' }), `${baseName}.doc`);
+            }
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        // Toggles & Utilities
+        function switchView(v) {
+            window.appState.currentView = v;
+            const gridBtn = document.getElementById('viewGridBtn');
+            const listBtn = document.getElementById('viewListBtn');
+            const gridView = document.getElementById('gridView');
+            const listView = document.getElementById('listView');
+
+            if (v === 'grid') {
+                gridBtn.className = "px-2.5 py-1 rounded-md font-bold transition bg-[#FFD700] text-[#2E1A47] shadow";
+                listBtn.className = "px-2.5 py-1 rounded-md font-bold text-purple-200 hover:text-white transition";
+                gridView.classList.remove('hidden');
+                listView.classList.add('hidden');
+            } else {
+                listBtn.className = "px-2.5 py-1 rounded-md font-bold transition bg-[#FFD700] text-[#2E1A47] shadow";
+                gridBtn.className = "px-2.5 py-1 rounded-md font-bold text-purple-200 hover:text-white transition";
+                listView.classList.remove('hidden');
+                gridView.classList.add('hidden');
+            }
+        }
+
+        const THEME_ICON_MOON = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+        const THEME_ICON_SUN = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            document.getElementById('themeIcon').innerHTML = isDark ? THEME_ICON_SUN : THEME_ICON_MOON;
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('translate-x-full');
+            document.getElementById('sidebarOverlay').classList.toggle('hidden');
+        }
+
+        function toggleExportDropdown() {
+            document.getElementById('exportDropdown').classList.toggle('hidden');
+        }
+
+        function updateSyncBadge(isSynced, msg) {
+            const dot = document.getElementById('syncDot');
+            const txt = document.getElementById('syncText');
+            txt.textContent = msg;
+
+            if (isSynced === true) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+            } else if (isSynced === false) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+            } else {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping";
+            }
+        }
+
+        function parseTimeToMinutes(t) {
+            if (!t) return 0;
+            const [time, period] = t.split(' ');
+            let [h, m] = time.split(':').map(Number);
+            if (period === 'PM' && h < 12) h += 12;
+            if (period === 'AM' && h === 12) h = 0;
+            return h * 60 + m;
+        }
+
+        function getDayFullName(key) {
+            const m = { Mon: 'Monday', Tue: 'Tuesday', Thu: 'Thursday', Fri: 'Friday' };
+            return m[key] || key;
+        }
+
+        function ordinal(n) {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
+        // Parse "YYYY-MM-DD" as a local date (new Date(str) treats it as UTC and can shift the day)
+        function parseLocalDate(str) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str || '');
+            return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(str);
+        }
+
+        function formatDate(str) {
+            if (!str) return '';
+            const d = parseLocalDate(str);
+            if (isNaN(d)) return str;
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function formatDateLong(str) {
+            if (!str) return '';
+            const d = parseLocalDate(str);
+            if (isNaN(d)) return str;
+            return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+    </script>
+    <!-- CONFIRMATION DIALOG -->
+    <div id="confirmModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onclick="if (event.target === this) closeConfirm(false)">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="bg-[#2E1A47] border-b-4 border-[#FFD700] px-4 py-3">
+                <h3 id="confirmTitle" class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide"></h3>
+            </div>
+            <div class="p-5 flex items-start gap-3">
+                <div class="shrink-0 w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <p id="confirmMessage" class="text-sm text-slate-700 dark:text-slate-200 pt-1 whitespace-pre-line break-words"></p>
+            </div>
+            <div class="px-5 pb-5 flex justify-end gap-2">
+                <button type="button" onclick="closeConfirm(false)" class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition">Cancel</button>
+                <button type="button" id="confirmOkBtn" onclick="closeConfirm(true)" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow">Delete</button>
+            </div>
+        </div>
+    </div>
+    <!-- APPROVALS / MY CHANGES -->
+    <div id="approvalsModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onclick="if (event.target === this) closeApprovals()">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="bg-[#2E1A47] px-5 py-4 border-b-2 border-[#FFD700] flex justify-between items-center">
+                <h3 id="approvalsTitle" class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide">Approvals</h3>
+                <button onclick="closeApprovals()" class="text-slate-300 hover:text-white text-lg" title="Close">
+                    <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div id="approvalsBody" class="p-4 sm:p-5 overflow-y-auto space-y-5 custom-scrollbar"></div>
+        </div>
+    </div>
+</body>
+</html>
