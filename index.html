@@ -56,7 +56,7 @@
                         <form id="loginForm" onsubmit="submitLogin(event)" class="space-y-4" novalidate>
                             <div>
                                 <label for="loginSN" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student Number</label>
-                                <input id="loginSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-24-01294-A"
+                                <input id="loginSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-XX-XXXXX-A"
                                     class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 uppercase placeholder:normal-case focus:ring-2 focus:ring-purple-600 outline-none">
                             </div>
                             <div>
@@ -77,7 +77,7 @@
                             </div>
                             <div>
                                 <label for="signupSN" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student Number</label>
-                                <input id="signupSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-24-01294-A"
+                                <input id="signupSN" type="text" autocomplete="username" autocapitalize="characters" placeholder="PM-XX-XXXXX-A"
                                     class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 uppercase placeholder:normal-case focus:ring-2 focus:ring-purple-600 outline-none">
                             </div>
                             <div>
@@ -946,7 +946,7 @@
             if (!window.authApi) { showAuthError('Still connecting to the server. Please try again in a moment.'); return; }
             const sn = normalizeStudentNumber(document.getElementById('loginSN').value);
             const pw = document.getElementById('loginPw').value;
-            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-24-01294-A.'); return; }
+            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-XX-XXXXX-A.'); return; }
             if (!pw) { showAuthError('Enter your password.'); return; }
             const btn = document.getElementById('loginBtn');
             btn.disabled = true; btn.classList.add('opacity-60');
@@ -969,7 +969,7 @@
             const pw = document.getElementById('signupPw').value;
             const pw2 = document.getElementById('signupPw2').value;
             if (fullName.length < 5 || !fullName.includes(' ')) { showAuthError('Enter your full name (first and last name).'); return; }
-            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-24-01294-A.'); return; }
+            if (!validStudentNumber(sn)) { showAuthError('Enter your student number like PM-XX-XXXXX-A.'); return; }
             if (!ROLE_LABELS[role]) { showAuthError('Choose a role.'); return; }
             if (pw.length < 8) { showAuthError('Your password must be at least 8 characters.'); return; }
             if (pw !== pw2) { showAuthError('The two passwords do not match.'); return; }
