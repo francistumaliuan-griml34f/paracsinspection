@@ -1034,7 +1034,7 @@
 
         const MAX_POLICY_BYTES = 3 * 1024 * 1024;
         const POLICY_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'png', 'jpg', 'jpeg'];
-        const ACC_TABS = ['account', 'security', 'alerts', 'files'];
+        const ACC_TABS = ['account', 'security', 'alerts', 'notices', 'files'];
         let accountTab = 'account';
 
         function fmtBytes(n) {
@@ -1079,12 +1079,13 @@
             ACC_TABS.forEach(t => {
                 document.getElementById('accPanel-' + t).classList.toggle('hidden', t !== tab);
                 document.getElementById('accTab-' + t).className =
-                    'flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide transition ' +
+                    'flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide transition ' +
                     (t === tab ? 'text-[#2E1A47] dark:text-[#FFD700] border-b-2 border-[#FFD700] bg-white dark:bg-slate-800'
                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white');
             });
             if (tab === 'account') fillAccountForm(true);
             if (tab === 'alerts') renderAlerts();
+            if (tab === 'notices') renderNotices();
             if (tab === 'files') renderFiles();
         }
 
@@ -1164,7 +1165,7 @@
             const seen = getAnnSeen();
             const a = annList().filter(x => (x.createdAt || 0) > seen && x.by !== myUid()).length;
             const n = notifList().filter(x => x.read !== true).length;
-            return a + n;
+            return a + n + unackedCount();
         }
 
         function updateAlertsUI() {
@@ -1175,7 +1176,12 @@
                 b.textContent = n;
                 b.classList.toggle('hidden', n === 0);
             });
+            const nb = document.getElementById('tabNoticesBadge');
+            const un = unackedCount();
+            nb.textContent = un;
+            nb.classList.toggle('hidden', un === 0);
             if (accountOpen() && accountTab === 'alerts') renderAlerts();
+            if (accountOpen() && accountTab === 'notices') renderNotices();
         }
 
         function markAlertsSeen() {
@@ -1188,6 +1194,7 @@
         function markAllRead() { markAlertsSeen(); }
 
         function renderAlerts() {
+            renderNoticeAlertCard();
             const seen = getAnnSeen();
             const newPill = '<span class="ml-2 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black uppercase">New</span>';
 
@@ -1262,18 +1269,48 @@
         }
 
         // ---- Files tab (policies / documents everyone can download) ----
+        let fileFilter = 'all';
+        const CATEGORY_LABEL = { policy: 'Policy file', normal: 'Normal file' };
+        const CATEGORY_STYLE = {
+            policy: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+            normal: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+        };
+        // Files uploaded before categories existed count as policy files
+        function fileCategory(p) { return p && p.category === 'normal' ? 'normal' : 'policy'; }
+
+        function setFileFilter(f) {
+            fileFilter = f;
+            renderFiles();
+        }
+
         function renderFiles() {
             const el = document.getElementById('filesList');
             if (!el) return;
-            const list = Object.entries(window.policies || {}).map(([id, p]) => ({ id, ...p }))
+            const all = Object.entries(window.policies || {}).map(([id, p]) => ({ id, ...p }))
                 .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            const counts = { all: all.length, policy: all.filter(p => fileCategory(p) === 'policy').length, normal: all.filter(p => fileCategory(p) === 'normal').length };
+
+            const labels = { all: 'All', policy: 'Policy files', normal: 'Normal files' };
+            ['all', 'policy', 'normal'].forEach(f => {
+                const btn = document.getElementById('fileFilter-' + f);
+                if (!btn) return;
+                btn.textContent = `${labels[f]} (${counts[f]})`;
+                btn.className = 'flex-1 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide transition ' +
+                    (f === fileFilter ? 'bg-[#2E1A47] text-[#FFD700] shadow' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white');
+            });
+
+            const list = fileFilter === 'all' ? all : all.filter(p => fileCategory(p) === fileFilter);
             el.innerHTML = list.length === 0
-                ? '<p class="text-xs text-slate-400 italic">No documents have been uploaded yet.</p>'
+                ? `<p class="text-xs text-slate-400 italic">${fileFilter === 'all' ? 'No files have been uploaded yet.' : `No ${labels[fileFilter].toLowerCase()} yet.`}</p>`
                 : list.map(p => {
+                    const cat = fileCategory(p);
                     const canDelete = isAdminRole() || (isCommitteeRole() && p.by === myUid());
                     return `
                     <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
-                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(p.title)}</div>
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(p.title)}</div>
+                            <span class="shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase ${CATEGORY_STYLE[cat]}">${esc(CATEGORY_LABEL[cat])}</span>
+                        </div>
                         <div class="text-[11px] text-slate-500 dark:text-slate-400 break-all">${esc(p.fileName)} · ${esc(fmtBytes(p.size))}</div>
                         <div class="text-[10px] text-slate-400 mt-1">Uploaded by ${esc(p.byName)} (${esc(ROLE_LABELS[p.byRole] || p.byRole || '')}) · ${esc(fmtDate(p.createdAt))}</div>
                         <div class="flex gap-2 mt-2">
@@ -1295,10 +1332,11 @@
             if (file.size === 0) { showToast('That file is empty.', 'error'); return; }
             if (file.size > MAX_POLICY_BYTES) { showToast(`That file is ${fmtBytes(file.size)}. The limit is 3 MB.`, 'error'); return; }
             const title = document.getElementById('uploadTitle').value.trim() || file.name;
+            const category = document.getElementById('uploadCategory').value === 'normal' ? 'normal' : 'policy';
             const btn = document.getElementById('uploadBtn');
             setBtnBusy(btn, true, 'Uploading...');
             try {
-                await window.cloudApi.uploadPolicy({ title, file });
+                await window.cloudApi.uploadPolicy({ title, file, category });
                 document.getElementById('uploadForm').reset();
                 showToast('Document uploaded.', 'success');
             } catch (err) {
@@ -1327,6 +1365,170 @@
                 onConfirm: () => window.cloudApi.deletePolicy(id).then(
                     () => showToast('Document deleted.', 'success'),
                     () => showToast('Could not delete the document.', 'error'))
+            });
+        }
+
+        // ---- Private violation notices ----
+        window.noticesInbox = {};   // id -> notice sent to me
+        window.noticesSent = {};    // id -> notices I sent (officers/executives: everyone's)
+
+        function noticeInboxList() {
+            return Object.entries(window.noticesInbox || {}).map(([id, n]) => ({ id, ...n }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+        function noticeSentArr() {
+            return Object.entries(window.noticesSent || {}).map(([id, n]) => ({ id, ...n }))
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+        function unackedCount() { return noticeInboxList().filter(n => !n.ackAt).length; }
+
+        function fmtIncidentDate(str) {
+            if (!str) return '';
+            const d = new Date(str + 'T00:00:00');
+            return isNaN(d) ? str : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function updateNoticesUI() {
+            if (accountOpen() && accountTab === 'notices') renderNotices();
+        }
+
+        // Shortcut card at the top of the Alerts tab when a notice needs acknowledging
+        function renderNoticeAlertCard() {
+            const el = document.getElementById('noticeAlertCard');
+            const n = unackedCount();
+            el.innerHTML = n
+                ? `<button type="button" onclick="setAccountTab('notices')" class="w-full text-left rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 px-4 py-3 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-950/50 transition">
+                       You have ${n} violation notice${n > 1 ? 's' : ''} to read and acknowledge. Tap to open Notices.
+                   </button>`
+                : '';
+        }
+
+        // Student picker for the sender (search + list)
+        function renderNoticeRecipients() {
+            const sel = document.getElementById('noticeTo');
+            if (!sel) return;
+            const keep = sel.value;
+            const q = document.getElementById('noticeSearch').value.trim().toLowerCase();
+            const me = myUid();
+            const people = Object.entries(window.allUsers || {})
+                .filter(([uid, u]) => uid !== me && u && (!q ||
+                    String(u.fullName || '').toLowerCase().includes(q) || String(u.studentNumber || '').toLowerCase().includes(q)))
+                .sort((a, b) => String(a[1].fullName).localeCompare(String(b[1].fullName)));
+            sel.innerHTML = '';
+            people.forEach(([uid, u]) => {
+                const opt = new Option(`${u.fullName} (${u.studentNumber})`, uid);
+                sel.appendChild(opt);
+            });
+            if (keep && people.some(([uid]) => uid === keep)) sel.value = keep;
+        }
+
+        function noticeCard(n, mode) {
+            const when = esc(fmtDate(n.createdAt));
+            if (mode === 'inbox') {
+                const acked = !!n.ackAt;
+                return `
+                <div class="rounded-lg border p-3 ${acked ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900' : 'border-rose-300 bg-rose-50 dark:bg-rose-950/20'}">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(n.title)}</div>
+                        <span class="shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase ${acked ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-600 text-white'}">${acked ? 'Acknowledged' : 'New'}</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Incident date: ${esc(fmtIncidentDate(n.incidentDate))}</div>
+                    <div class="text-xs text-slate-700 dark:text-slate-200 mt-2 whitespace-pre-line break-words">${esc(n.details)}</div>
+                    ${n.action ? `<div class="mt-2 text-xs text-slate-700 dark:text-slate-200"><span class="font-bold">Action required:</span> ${esc(n.action)}</div>` : ''}
+                    <div class="text-[10px] text-slate-400 mt-2">From ${esc(n.fromName)} (${esc(ROLE_LABELS[n.fromRole] || n.fromRole || '')}) · ${when}</div>
+                    ${acked
+                        ? `<div class="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">You acknowledged this on ${esc(fmtDate(n.ackAt))}</div>`
+                        : `<button type="button" onclick="acknowledgeNotice('${esc(n.id)}')" class="mt-2 px-3 py-1.5 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] rounded-lg text-[11px] font-bold">I have read this notice</button>`}
+                </div>`;
+            }
+            // sent list (sender / officers)
+            const canRetract = isAdminRole() || n.from === myUid();
+            return `
+            <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(n.title)}</div>
+                        <div class="text-[11px] text-slate-600 dark:text-slate-300">To ${esc(n.toName)} (${esc(n.toSN)})</div>
+                    </div>
+                    <span class="shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase ${n.ackAt ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}">${n.ackAt ? 'Acknowledged' : 'Not yet read'}</span>
+                </div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Incident date: ${esc(fmtIncidentDate(n.incidentDate))}</div>
+                <div class="text-xs text-slate-700 dark:text-slate-200 mt-2 whitespace-pre-line break-words">${esc(n.details)}</div>
+                ${n.action ? `<div class="mt-2 text-xs text-slate-700 dark:text-slate-200"><span class="font-bold">Action required:</span> ${esc(n.action)}</div>` : ''}
+                <div class="text-[10px] text-slate-400 mt-2">${isAdminRole() ? `Sent by ${esc(n.fromName)} · ` : ''}${when}${n.ackAt ? ` · Acknowledged ${esc(fmtDate(n.ackAt))}` : ''}</div>
+                ${canRetract ? `<button type="button" onclick="retractNotice('${esc(n.id)}')" class="mt-2 px-3 py-1.5 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white rounded-lg text-[11px] font-bold transition">Delete notice</button>` : ''}
+            </div>`;
+        }
+
+        function renderNotices() {
+            const inbox = noticeInboxList();
+            document.getElementById('noticeInbox').innerHTML = inbox.length === 0
+                ? '<p class="text-xs text-slate-400 italic">You have no violation notices.</p>'
+                : inbox.map(n => noticeCard(n, 'inbox')).join('');
+
+            if (canModify()) {
+                renderNoticeRecipients();
+                const sent = noticeSentArr();
+                document.getElementById('noticeSentTitle').textContent = isAdminRole() ? `All notices sent (${sent.length})` : `Notices I sent (${sent.length})`;
+                document.getElementById('noticeSent').innerHTML = sent.length === 0
+                    ? '<p class="text-xs text-slate-400 italic">No notices sent yet.</p>'
+                    : sent.map(n => noticeCard(n, 'sent')).join('');
+            }
+        }
+
+        function submitNotice(e) {
+            e.preventDefault();
+            if (!canModify() || !window.cloudApi) return;
+            const toUid = document.getElementById('noticeTo').value;
+            const person = (window.allUsers || {})[toUid];
+            const title = document.getElementById('noticeTitle').value.trim();
+            const incidentDate = document.getElementById('noticeDate').value;
+            const details = document.getElementById('noticeDetails').value.trim();
+            const action = document.getElementById('noticeAction').value.trim();
+            if (!person) { showToast('Choose the student first.', 'error'); return; }
+            if (title.length < 3) { showToast('Enter what the violation is.', 'error'); return; }
+            if (!incidentDate) { showToast('Choose the date of the incident.', 'error'); return; }
+            if (details.length < 5) { showToast('Add the details of what happened.', 'error'); return; }
+
+            askConfirm({
+                title: 'Send Violation Notice',
+                message: `Send this violation notice to ${person.fullName} (${person.studentNumber})?\n\nOnly that student, you and the Executive / Peace and Order Officers will be able to see it.`,
+                confirmText: 'Yes, Send',
+                danger: false,
+                onConfirm: () => {
+                    const btn = document.getElementById('noticeSendBtn');
+                    setBtnBusy(btn, true, 'Sending...');
+                    const payload = { to: toUid, toName: person.fullName, toSN: person.studentNumber, title, incidentDate, details };
+                    if (action) payload.action = action;
+                    window.cloudApi.sendNotice(payload).then(
+                        () => {
+                            document.getElementById('noticeForm').reset();
+                            showToast(`Notice sent privately to ${person.fullName}.`, 'success');
+                        },
+                        () => showToast('Could not send the notice. Please try again.', 'error')
+                    ).finally(() => setBtnBusy(btn, false));
+                }
+            });
+        }
+
+        function acknowledgeNotice(id) {
+            const n = (window.noticesInbox || {})[id];
+            if (!n || n.ackAt || !window.cloudApi) return;
+            window.cloudApi.ackNotice(id, n.from).then(
+                () => showToast('Thank you. The sender can now see that you read it.', 'success'),
+                () => showToast('Could not save your acknowledgement. Please try again.', 'error'));
+        }
+
+        function retractNotice(id) {
+            const n = (window.noticesSent || {})[id];
+            if (!n) return;
+            askConfirm({
+                title: 'Delete Notice',
+                message: `Delete the notice "${n.title}" sent to ${n.toName}? The student will no longer see it.`,
+                confirmText: 'Yes, Delete',
+                onConfirm: () => window.cloudApi.retractNotice(id, n.to, n.from).then(
+                    () => showToast('Notice deleted.', 'success'),
+                    () => showToast('Could not delete the notice.', 'error'))
             });
         }
 
@@ -1378,6 +1580,8 @@
             const modify = canModify();
             document.getElementById('annComposer').classList.toggle('hidden', !modify);
             document.getElementById('uploadForm').classList.toggle('hidden', !modify);
+            document.getElementById('noticeForm').classList.toggle('hidden', !modify);
+            document.getElementById('noticeSentWrap').classList.toggle('hidden', !modify);
             if (accountOpen() && accountTab === 'account') fillAccountForm(false);
             updateAlertsUI();
             renderFiles();
@@ -1590,6 +1794,7 @@
             commonStarted = false; deletingAccount = false;
             window.currentUser = null; window.allUsers = {}; window.proposals = {};
             window.announcements = {}; window.myNotifications = {}; window.policies = {};
+            window.noticesInbox = {}; window.noticesSent = {};
         }
 
         function failSignIn(message) {
@@ -1665,10 +1870,12 @@
             roleUnsubs.forEach(u => u()); roleUnsubs = [];
             const admin = role === 'executive' || role === 'officer';
 
-            if (admin) {
+            // officers/executives and the committee can see the account list (committee needs it to pick a student)
+            if (admin || role === 'committee') {
                 roleUnsubs.push(onValue(ref(db, 'users'), (s) => {
                     window.allUsers = s.val() || {};
                     updateApprovalsUI();
+                    updateNoticesUI();
                 }, (e) => console.warn('Users list error:', e)));
             } else {
                 window.allUsers = {};
@@ -1681,6 +1888,22 @@
                 }, (e) => console.warn('Proposals list error:', e)));
             } else {
                 window.proposals = {};
+            }
+            // notices a sender has sent: committee sees their own, officers/executives see everyone's
+            if (role === 'committee') {
+                roleUnsubs.push(onValue(ref(db, `violations/sent/${window.currentUser.uid}`), (s) => {
+                    window.noticesSent = s.val() || {};
+                    updateNoticesUI();
+                }, (e) => console.warn('Sent notices error:', e)));
+            } else if (admin) {
+                roleUnsubs.push(onValue(ref(db, 'violations/sent'), (s) => {
+                    const all = {};
+                    Object.values(s.val() || {}).forEach(bySender => Object.assign(all, bySender));
+                    window.noticesSent = all;
+                    updateNoticesUI();
+                }, (e) => console.warn('Sent notices error:', e)));
+            } else {
+                window.noticesSent = {};
             }
             updateApprovalsUI();
         }
@@ -1778,6 +2001,12 @@
                 window.policies = s.val() || {};
                 renderFiles();
             }, (e) => console.warn('Documents error:', e)));
+
+            // violation notices sent to me (private)
+            baseUnsubs.push(onValue(ref(db, `violations/inbox/${uid}`), (s) => {
+                window.noticesInbox = s.val() || {};
+                updateAlertsUI();
+            }, (e) => console.warn('Notices error:', e)));
         }
 
         function stopLiveListeners() {
@@ -1844,7 +2073,7 @@
                 return Promise.all(ids.map(id => set(ref(db, `notifications/${uid}/${id}/read`), true)));
             },
 
-            uploadPolicy: async ({ title, file }) => {
+            uploadPolicy: async ({ title, file, category }) => {
                 const cu = window.currentUser;
                 const data = await fileToBase64(file);
                 const id = dbPush(ref(db, 'policies/meta')).key;
@@ -1852,6 +2081,7 @@
                 try {
                     await set(ref(db, `policies/meta/${id}`), {
                         title,
+                        category: category === 'normal' ? 'normal' : 'policy',
                         fileName: file.name.replace(/[\\/:*?"<>|]+/g, '_'),
                         size: file.size,
                         mime: file.type || 'application/octet-stream',
@@ -1881,6 +2111,33 @@
                 a.click();
                 a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
+            },
+
+            // Private violation notices: one copy for the student, one for the sender
+            // (officers/executives can read every sender copy)
+            sendNotice: async (n) => {
+                const cu = window.currentUser;
+                const id = dbPush(ref(db, `violations/inbox/${n.to}`)).key;
+                const record = { ...n, from: cu.uid, fromName: cu.fullName, fromRole: cu.role, createdAt: serverTimestamp() };
+                await set(ref(db, `violations/inbox/${n.to}/${id}`), record);
+                try {
+                    await set(ref(db, `violations/sent/${cu.uid}/${id}`), record);
+                } catch (err) {
+                    await remove(ref(db, `violations/inbox/${n.to}/${id}`)).catch(() => {});
+                    throw err;
+                }
+            },
+
+            // The student confirms they read it; the sender's copy is stamped too
+            ackNotice: async (id, fromUid) => {
+                const uid = window.currentUser.uid;
+                await set(ref(db, `violations/inbox/${uid}/${id}/ackAt`), serverTimestamp());
+                await set(ref(db, `violations/sent/${fromUid}/${id}/ackAt`), serverTimestamp()).catch(() => {});
+            },
+
+            retractNotice: async (id, toUid, fromUid) => {
+                await remove(ref(db, `violations/inbox/${toUid}/${id}`));
+                await remove(ref(db, `violations/sent/${fromUid}/${id}`));
             },
 
             // The file is removed first, while the info record still proves who owns it
@@ -2798,10 +3055,11 @@
         </div>
 
         <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-            <button id="accTab-account" onclick="setAccountTab('account')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Account</button>
-            <button id="accTab-security" onclick="setAccountTab('security')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Security</button>
-            <button id="accTab-alerts" onclick="setAccountTab('alerts')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Alerts<span id="tabAlertsBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
-            <button id="accTab-files" onclick="setAccountTab('files')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Files</button>
+            <button id="accTab-account" onclick="setAccountTab('account')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Account</button>
+            <button id="accTab-security" onclick="setAccountTab('security')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Security</button>
+            <button id="accTab-alerts" onclick="setAccountTab('alerts')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Alerts<span id="tabAlertsBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
+            <button id="accTab-notices" onclick="setAccountTab('notices')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Notices<span id="tabNoticesBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
+            <button id="accTab-files" onclick="setAccountTab('files')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Files</button>
         </div>
 
         <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -2875,6 +3133,7 @@
                     <button id="annPostBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Post Announcement</button>
                 </form>
 
+                <div id="noticeAlertCard"></div>
                 <div id="adminAlertCard"></div>
 
                 <div>
@@ -2891,12 +3150,68 @@
                 </div>
             </section>
 
+            <!-- NOTICES (private violation notices) -->
+            <section id="accPanel-notices" class="hidden p-5 space-y-5">
+                <div>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Violation notices sent to me</h4>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">These are private. Only you, the sender and the Executive / Peace and Order Officers can see them.</p>
+                    <div id="noticeInbox" class="space-y-2"></div>
+                </div>
+
+                <form id="noticeForm" onsubmit="submitNotice(event)" class="hidden bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-3" novalidate>
+                    <div>
+                        <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Send a violation notice (private)</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Only the student you choose, you and the Executive / Peace and Order Officers can see it.</p>
+                    </div>
+                    <div>
+                        <label for="noticeSearch" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student</label>
+                        <input id="noticeSearch" type="search" oninput="renderNoticeRecipients()" placeholder="Search name or student number"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none mb-2">
+                        <select id="noticeTo" size="5"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none"></select>
+                    </div>
+                    <div>
+                        <label for="noticeTitle" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Violation</label>
+                        <input id="noticeTitle" type="text" maxlength="120" placeholder="e.g. Improper uniform"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="noticeDate" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date of incident</label>
+                        <input id="noticeDate" type="date"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="noticeDetails" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Details</label>
+                        <textarea id="noticeDetails" rows="4" maxlength="2000" placeholder="What happened"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label for="noticeAction" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Action required (optional)</label>
+                        <input id="noticeAction" type="text" maxlength="500" placeholder="e.g. Report to the Disciplinary Committee office"
+                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <button id="noticeSendBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Send Notice</button>
+                </form>
+
+                <div id="noticeSentWrap" class="hidden">
+                    <h4 id="noticeSentTitle" class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notices I sent</h4>
+                    <div id="noticeSent" class="space-y-2"></div>
+                </div>
+            </section>
+
             <!-- FILES -->
             <section id="accPanel-files" class="hidden p-5 space-y-5">
                 <form id="uploadForm" onsubmit="submitUpload(event)" class="hidden bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2" novalidate>
                     <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Upload a policy or document</h4>
                     <input id="uploadTitle" type="text" maxlength="120" placeholder="Title (optional)"
                         class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    <div>
+                        <label for="uploadCategory" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Category</label>
+                        <select id="uploadCategory" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                            <option value="policy">Policy file</option>
+                            <option value="normal">Normal file</option>
+                        </select>
+                    </div>
                     <input id="uploadFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg"
                         class="w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[#2E1A47] file:text-[#FFD700] file:font-bold file:text-xs">
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">PDF, Word, Excel, PowerPoint, text or image. Up to 3 MB each.</p>
@@ -2904,7 +3219,11 @@
                 </form>
 
                 <div>
-                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Policies &amp; documents</h4>
+                    <div class="flex gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-3">
+                        <button type="button" id="fileFilter-all" onclick="setFileFilter('all')" class="flex-1 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide transition">All</button>
+                        <button type="button" id="fileFilter-policy" onclick="setFileFilter('policy')" class="flex-1 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide transition">Policy files</button>
+                        <button type="button" id="fileFilter-normal" onclick="setFileFilter('normal')" class="flex-1 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wide transition">Normal files</button>
+                    </div>
                     <div id="filesList" class="space-y-2"></div>
                 </div>
             </section>
