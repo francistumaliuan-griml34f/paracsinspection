@@ -86,6 +86,10 @@
                                 <label for="signupRole" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Role</label>
                                 <select id="signupRole" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
                                     <option value="student">Student (view only)</option>
+                                    <option value="rep1">1st Year Representative</option>
+                                    <option value="rep2">2nd Year Representative</option>
+                                    <option value="rep3">3rd Year Representative</option>
+                                    <option value="rep4">4th Year Representative</option>
                                     <option value="committee">Disciplinary Committee</option>
                                     <option value="officer">Peace and Order Officer</option>
                                     <option value="executive">Executive Officer</option>
@@ -263,6 +267,10 @@
                 </div>
 
                 <!-- Add Inspection Button -->
+                <button id="aiBtn" onclick="openAI()" class="hidden bg-white dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-slate-700 text-[#2E1A47] dark:text-[#FFD700] font-extrabold px-4 py-2.5 rounded-lg text-xs sm:text-sm flex items-center justify-center space-x-2 border border-[#2E1A47]/40 dark:border-amber-400/40 shadow transition">
+                    <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 3v4"/><path d="M17 5h4"/><path d="M5 17v4"/><path d="M3 19h4"/></svg>
+                    <span>AI Assistant</span>
+                </button>
                 <button id="addScheduleBtn" onclick="openModal()" class="bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold px-4 py-2.5 rounded-lg text-xs sm:text-sm flex items-center justify-center space-x-2 border border-amber-400/40 shadow transition">
                     <svg class="shrink-0 text-[#FFD700]" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                     <span id="addBtnLabel">Add Schedule</span>
@@ -569,6 +577,10 @@
 
         const ROLE_LABELS = {
             student: 'Student (Viewer)',
+            rep1: '1st Year Representative',
+            rep2: '2nd Year Representative',
+            rep3: '3rd Year Representative',
+            rep4: '4th Year Representative',
             committee: 'Disciplinary Committee',
             officer: 'Peace and Order Officer',
             executive: 'Executive Officer'
@@ -581,7 +593,18 @@
         function currentRole() { return window.currentUser ? window.currentUser.role : null; }
         function isAdminRole() { const r = currentRole(); return r === 'executive' || r === 'officer'; }
         function isCommitteeRole() { return currentRole() === 'committee'; }
+        // Executives/officers/committee (staff): approvals, announcements, uploads, notices
         function canModify() { return isAdminRole() || isCommitteeRole(); }
+
+        // Year level representatives (1st to 4th year): may add and edit the inspection schedule of their own year only
+        function repYear() { const m = /^rep([1-4])$/.exec(currentRole() || ''); return m ? Number(m[1]) : 0; }
+        function isRepRole() { return repYear() > 0; }
+        function canEditSchedule() { return isAdminRole() || isCommitteeRole() || isRepRole(); }
+        function canEditItem(item) {
+            if (!item) return false;
+            if (isAdminRole() || isCommitteeRole()) return true;
+            return isRepRole() && Number(item.year) === repYear();
+        }
 
         function esc(v) {
             return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -674,9 +697,27 @@
             );
         }
 
-        // Save: officers/executives write the schedule; committee sends it for approval; students cannot change it
+        // A year level representative can only change their own year. Everything else stays exactly as the cloud has it.
+        function submitRepChanges() {
+            const y = repYear();
+            const base = window.cloudBaseline;
+            if (base) {
+                const mine = window.appState.items.filter(i => Number(i.year) === y).map(i => ({ ...i, year: y }));
+                const others = (base.items || []).filter(i => Number(i.year) !== y);
+                window.appState.items = [...others, ...mine];
+                const keep = JSON.parse(JSON.stringify(base));
+                applyState({ month: keep.month, year: keep.year, dayDates: keep.dayDates, snapshots: keep.snapshots });
+            }
+            saveToLocalCache();
+            window.renderUI();
+            if (window.cloudPush) window.cloudPush();
+        }
+
+        // Save: officers/executives write the schedule; committee sends it for approval;
+        // year representatives write their own year; students cannot change it
         window.saveStateToCloud = function() {
             if (isCommitteeRole()) { submitCommitteeChanges(); return; }
+            if (isRepRole()) { submitRepChanges(); return; }
             if (!isAdminRole()) {
                 if (window.cloudBaseline) applyState(JSON.parse(JSON.stringify(window.cloudBaseline)));
                 window.renderUI();
@@ -711,8 +752,10 @@
             document.getElementById('userRole').textContent = ROLE_LABELS[u.role] || u.role;
             document.getElementById('userChip').classList.remove('hidden');
 
-            document.getElementById('addScheduleBtn').classList.toggle('hidden', !modify);
-            document.getElementById('addBtnLabel').textContent = admin ? 'Add Schedule' : 'Propose Schedule';
+            const editor = canEditSchedule();
+            document.getElementById('addScheduleBtn').classList.toggle('hidden', !editor);
+            document.getElementById('aiBtn').classList.toggle('hidden', !editor);
+            document.getElementById('addBtnLabel').textContent = isCommitteeRole() ? 'Propose Schedule' : 'Add Schedule';
             ['monthSelect', 'yearSelect', 'date-Mon', 'date-Tue', 'date-Thu', 'date-Fri'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -731,6 +774,7 @@
             }
             if (u.role === 'student') msgs.push('You have view-only access to the schedule.');
             if (u.role === 'committee') msgs.push('Your edits are sent to a Peace and Order Officer for approval before they appear on the schedule.');
+            if (isRepRole()) msgs.push(`You can add and edit the inspection schedule of the ${ordinal(repYear())} Year only. Your changes show for everyone right away.`);
             const banner = document.getElementById('roleBanner');
             banner.textContent = msgs.join(' ');
             banner.classList.toggle('hidden', msgs.length === 0);
@@ -741,7 +785,7 @@
         }
 
         // ---- Members list: see every account and assign roles / co-admins ----
-        const ROLE_ORDER = { executive: 0, officer: 1, committee: 2, student: 3 };
+        const ROLE_ORDER = { executive: 0, officer: 1, committee: 2, rep1: 3, rep2: 3, rep3: 3, rep4: 3, student: 4 };
 
         function openMembers() {
             if (!isAdminRole()) return;
@@ -765,13 +809,17 @@
             const counts = { executive: 0, officer: 0, committee: 0, student: 0 };
             all.forEach(u => { if (counts[u.role] !== undefined) counts[u.role]++; });
             document.getElementById('membersCount').textContent =
-                `${all.length} total · ${counts.executive} Executive · ${counts.officer} P&O · ${counts.committee} Committee · ${counts.student} Student`;
+                `${all.length} total · ${counts.executive} Executive · ${counts.officer} P&O · ${counts.committee} Committee · ${all.filter(u => /^rep[1-4]$/.test(u.role)).length} Reps · ${counts.student} Student`;
 
             const roleStyle = {
                 executive: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
                 officer: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
                 committee: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-                student: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                student: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+                rep1: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+                rep2: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+                rep3: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+                rep4: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
             };
 
             document.getElementById('membersList').innerHTML = list.length === 0
@@ -1587,6 +1635,302 @@
             renderFiles();
         }
 
+        // ================= AI SCHEDULE ASSISTANT =================
+        window.aiSettings = null;          // { key, model } from the database (people who can edit the schedule)
+        let aiChat = [];                   // { role: 'user' | 'ai', text, raw, entries?, added? }
+        let aiBusy = false;
+        let aiShowSettings = false;
+        const AI_DEFAULT_MODEL = 'gemini-3.8-flash';
+        const AI_SECTIONS = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliett", "Kilo", "Lima", "Mike",
+            "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-ray", "Yankee", "Zulu"];
+        const AI_DAYS = { Mon: 'Monday', Tue: 'Tuesday', Thu: 'Thursday', Fri: 'Friday' };
+
+        function aiRooms() { return [...document.getElementById('itemRoom').options].map(o => o.value); }
+
+        function aiInstructions() {
+            const ry = repYear();
+            return `You are the scheduling assistant for a college inspection schedule. Turn the user's message into inspection schedule entries.
+Reply with ONLY one JSON object (no markdown, no code fences) in exactly this shape:
+{"reply":"short friendly message","entries":[{"day":"Mon","year":1,"section":"Alpha","time":"10:00 AM","room":"RM 404","status":"Pending"}]}
+Rules:
+- "day" must be exactly one of Mon, Tue, Thu, Fri. Inspections are held only on those four days. If the user asks for another day, create no entry for it and explain in "reply".
+- "year" is the year level, a number from 1 to 4.${ry ? ` This user is the ${ordinal(ry)} Year representative, so ALWAYS use year ${ry}.` : ' If the year level is not stated, ask for it.'}
+- "section" must be a NATO name spelled exactly like one of: ${AI_SECTIONS.join(', ')}. Treat "Section A" as Alpha, "B" as Bravo, "C" as Charlie and so on in alphabetical order.
+- "time" is 12-hour with a leading zero and minutes in steps of 5, like "10:00 AM" or "01:30 PM". Convert "1pm" to "01:00 PM" and "noon" to "12:00 PM".
+- "room" must be exactly one of: ${aiRooms().join(', ')}. Use "TBA" when the user gives no room.
+- "status" is "Pending" unless the user says otherwise (allowed: ${STATUS_OPTIONS.join(', ')}).
+- Create one entry per section per inspection. If the user lists several sections, days or times, create all of the entries.
+- If something needed is missing or unclear (day, section or time), ask one short question in "reply" and leave out the unclear entries. Never guess or invent entries.
+- Keep "reply" to one or two short sentences.`;
+        }
+
+        // ---- opening, closing, settings ----
+        function openAI() {
+            if (!canEditSchedule()) return;
+            document.getElementById('aiModal').classList.remove('hidden');
+            aiShowSettings = false;
+            renderAI();
+            setTimeout(() => { const i = document.getElementById('aiInput'); if (i && !i.disabled) i.focus(); }, 50);
+        }
+        function closeAI() { document.getElementById('aiModal').classList.add('hidden'); }
+
+        function aiToggleSettings() { aiShowSettings = !aiShowSettings; renderAI(); }
+
+        function updateAiUI() {
+            if (!document.getElementById('aiModal').classList.contains('hidden')) renderAI();
+        }
+
+        async function aiSaveSettings(e) {
+            e.preventDefault();
+            if (!isAdminRole() || !window.cloudApi) return;
+            const keyInput = document.getElementById('aiKeyInput').value.trim();
+            const model = document.getElementById('aiModelInput').value.trim() || AI_DEFAULT_MODEL;
+            const key = keyInput || (window.aiSettings && window.aiSettings.key) || '';
+            if (key.length < 20) { showToast('Paste your Gemini API key first.', 'error'); return; }
+            if (!/^[A-Za-z0-9._-]{3,80}$/.test(model)) { showToast('The model name looks wrong. Example: ' + AI_DEFAULT_MODEL, 'error'); return; }
+            const btn = document.getElementById('aiSaveBtn');
+            setBtnBusy(btn, true, 'Saving...');
+            try {
+                await window.cloudApi.saveAiSettings({ key, model });
+                document.getElementById('aiKeyInput').value = '';
+                aiShowSettings = false;
+                showToast('AI settings saved.', 'success');
+            } catch (err) {
+                showToast('Could not save the AI settings. Check that the database rules are published.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        function aiRemoveSettings() {
+            if (!isAdminRole() || !window.cloudApi) return;
+            askConfirm({
+                title: 'Remove AI Key',
+                message: 'Remove the saved API key? Nobody will be able to use the AI assistant until a new key is added.',
+                confirmText: 'Yes, Remove',
+                onConfirm: () => window.cloudApi.clearAiSettings().then(
+                    () => showToast('AI key removed.', 'success'),
+                    () => showToast('Could not remove the key.', 'error'))
+            });
+        }
+
+        // ---- rendering ----
+        function renderAI() {
+            const ready = !!(window.aiSettings && window.aiSettings.key);
+            const admin = isAdminRole();
+            const showForm = admin && (!ready || aiShowSettings);
+
+            document.getElementById('aiSubtitle').textContent = isRepRole()
+                ? `Tell me your ${ordinal(repYear())} Year inspection schedule and I will build it.`
+                : isCommitteeRole() ? 'Describe the schedule and I will build it. Entries are sent to an officer for approval.'
+                : 'Describe the schedule and I will build it.';
+
+            document.getElementById('aiSettingsLink').classList.toggle('hidden', !(admin && ready));
+            document.getElementById('aiSettingsForm').classList.toggle('hidden', !showForm);
+            if (showForm) {
+                document.getElementById('aiModelInput').value = (window.aiSettings && window.aiSettings.model) || AI_DEFAULT_MODEL;
+                document.getElementById('aiKeyHint').textContent = ready ? `A key ending in ...${window.aiSettings.key.slice(-4)} is saved. Leave this empty to keep it.` : '';
+                document.getElementById('aiRemoveBtn').classList.toggle('hidden', !ready);
+            }
+
+            const notReady = document.getElementById('aiNotReady');
+            notReady.classList.toggle('hidden', ready || admin);
+            notReady.textContent = ready || admin ? '' : 'The AI assistant is not set up yet. Ask an Executive or Peace and Order Officer to add the Gemini key under AI settings.';
+
+            document.getElementById('aiForm').classList.toggle('hidden', !ready);
+            document.getElementById('aiMessages').classList.toggle('hidden', !ready);
+            document.getElementById('aiInput').disabled = !ready || aiBusy;
+            document.getElementById('aiSendBtn').disabled = !ready || aiBusy;
+
+            const box = document.getElementById('aiMessages');
+            const hello = `<div class="max-w-[85%] rounded-xl rounded-tl-sm bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-xs font-semibold">Hi! Tell me the inspections you want to schedule, one or many. Example:<br><span class="text-slate-500 dark:text-slate-300">"${isRepRole() ? '' : '2nd Year '}Alpha Monday 10am RM 404, Bravo Tuesday 1:30pm RM 405"</span></div>`;
+            box.innerHTML = hello + aiChat.map((m, i) => aiMessageHtml(m, i)).join('') +
+                (aiBusy ? '<div class="max-w-[85%] rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-2 text-xs font-semibold">Thinking...</div>' : '');
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function aiConflict(item, others) {
+            const sameTime = (a, b) => a.day === b.day && a.time === b.time;
+            const existing = window.appState.items;
+            if (existing.some(e => e.day === item.day && Number(e.year) === item.year && e.section === item.section && e.time === item.time && e.room === item.room)) return 'Already in the schedule';
+            const hit = existing.concat(others).find(e => e !== item && sameTime(e, item) && Number(e.year) === item.year && e.section === item.section);
+            if (hit) return 'This section already has an inspection at that time';
+            const roomHit = existing.concat(others).find(e => e !== item && sameTime(e, item) && item.room !== 'TBA' && e.room === item.room);
+            if (roomHit) return `${item.room} is already used then (${ordinal(roomHit.year)} Year ${roomHit.section})`;
+            return '';
+        }
+
+        function aiMessageHtml(m, i) {
+            if (m.role === 'user') {
+                return `<div class="flex justify-end"><div class="max-w-[85%] rounded-xl rounded-tr-sm bg-[#2E1A47] text-white px-3 py-2 text-xs font-semibold whitespace-pre-line break-words">${esc(m.text)}</div></div>`;
+            }
+            let body = `<div class="whitespace-pre-line break-words">${esc(m.text)}</div>`;
+            if (m.entries && m.entries.length) {
+                const rows = m.entries.map((en, k) => {
+                    const warn = m.added ? '' : aiConflict(en.item, m.entries.map(x => x.item));
+                    return `
+                    <label class="flex items-start gap-2 px-2 py-1.5 ${k ? 'border-t border-slate-200 dark:border-slate-600' : ''}">
+                        <input type="checkbox" ${en.checked ? 'checked' : ''} ${m.added ? 'disabled' : ''} onchange="aiToggleEntry(${i}, ${k}, this.checked)" class="mt-0.5 shrink-0">
+                        <span class="text-[11px] font-semibold">
+                            ${esc(AI_DAYS[en.item.day])} · ${esc(ordinal(en.item.year))} Year · Section ${esc(en.item.section)} · ${esc(en.item.time)} · ${esc(en.item.room)} · ${esc(en.item.status)}
+                            ${warn ? `<span class="block text-[10px] font-bold text-amber-700 dark:text-amber-300">Heads up: ${esc(warn)}</span>` : ''}
+                        </span>
+                    </label>`;
+                }).join('');
+                const count = m.entries.filter(en => en.checked).length;
+                const verb = isCommitteeRole() ? 'Send for approval' : 'Add to schedule';
+                body += `<div class="mt-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800">${rows}</div>
+                    ${m.added
+                        ? `<div class="mt-2 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">${esc(m.addedText || 'Done')}</div>`
+                        : `<button type="button" onclick="aiAddEntries(${i})" ${count ? '' : 'disabled'} class="mt-2 px-3 py-1.5 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] rounded-lg text-[11px] font-bold ${count ? '' : 'opacity-50'}">${verb} (${count})</button>`}`;
+            }
+            if (m.skipped && m.skipped.length) {
+                body += `<div class="mt-2 text-[10px] text-slate-500 dark:text-slate-300">${m.skipped.map(s => esc(s)).join('<br>')}</div>`;
+            }
+            return `<div class="flex"><div class="max-w-[92%] rounded-xl rounded-tl-sm bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-xs font-semibold">${body}</div></div>`;
+        }
+
+        function aiToggleEntry(msgIndex, entryIndex, checked) {
+            const m = aiChat[msgIndex];
+            if (!m || m.added) return;
+            m.entries[entryIndex].checked = checked;
+            renderAI();
+        }
+
+        // ---- turning the AI's answer into safe schedule entries ----
+        function aiNormalizeTime(t) {
+            const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*([AaPp])\.?[Mm]?\.?\s*$/.exec(String(t || ''));
+            if (!m) return null;
+            let h = Number(m[1]), min = m[2] === undefined ? 0 : Number(m[2]);
+            if (h < 1 || h > 12 || min > 59) return null;
+            min = Math.round(min / 5) * 5;
+            if (min === 60) min = 55;
+            return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')} ${m[3].toUpperCase()}M`;
+        }
+
+        function aiSanitizeEntry(e) {
+            if (!e || typeof e !== 'object') return { problem: 'An entry was not readable.' };
+            const day = ['Mon', 'Tue', 'Thu', 'Fri'].find(d => d.toLowerCase() === String(e.day || '').slice(0, 3).toLowerCase());
+            if (!day) return { problem: `Skipped an entry: "${e.day}" is not an inspection day (Mon, Tue, Thu, Fri).` };
+            let year = Number(e.year);
+            if (isRepRole()) year = repYear();
+            if (![1, 2, 3, 4].includes(year)) return { problem: 'Skipped an entry with no valid year level (1 to 4).' };
+            const section = AI_SECTIONS.find(s => s.toLowerCase() === String(e.section || '').trim().toLowerCase());
+            if (!section) return { problem: `Skipped an entry: "${e.section}" is not a known section.` };
+            const time = aiNormalizeTime(e.time);
+            if (!time) return { problem: `Skipped an entry: "${e.time}" is not a valid time.` };
+            const rooms = aiRooms();
+            const room = rooms.find(r => r.toLowerCase() === String(e.room || '').trim().toLowerCase()) || 'TBA';
+            const status = STATUS_OPTIONS.find(s => s.toLowerCase() === String(e.status || '').trim().toLowerCase()) || 'Pending';
+            return { item: { day, year, section, time, room, status } };
+        }
+
+        function aiParseReply(text) {
+            let t = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+            const a = t.indexOf('{'), b = t.lastIndexOf('}');
+            if (a === -1 || b <= a) return { reply: t || 'I could not read that. Please try again.', entries: [] };
+            try {
+                const obj = JSON.parse(t.slice(a, b + 1));
+                return { reply: String(obj.reply || ''), entries: Array.isArray(obj.entries) ? obj.entries : [] };
+            } catch (err) {
+                return { reply: 'I could not read my own answer. Please send your message again.', entries: [] };
+            }
+        }
+
+        function aiErrorMessage(status, detail) {
+            if (status === 400 && /api key/i.test(detail)) return 'Google rejected the API key. Ask an officer to check the key in AI settings.';
+            if (status === 401 || status === 403) return 'Google refused this key (not allowed). Ask an officer to check the key in AI settings.';
+            if (status === 404) return 'That AI model name was not found. Ask an officer to update the model name in AI settings.';
+            if (status === 429) return 'The free AI limit was reached for now. Please wait a minute and try again.';
+            if (status >= 500) return 'Google\'s AI service is busy. Please try again in a moment.';
+            return 'The AI could not answer. ' + (detail ? detail.slice(0, 160) : '');
+        }
+
+        async function callGemini(history) {
+            const { key, model } = window.aiSettings;
+            const contents = [
+                { role: 'user', parts: [{ text: aiInstructions() }] },
+                { role: 'model', parts: [{ text: '{"reply":"Understood. Tell me the schedule.","entries":[]}' }] },
+                ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.role === 'user' ? m.text : (m.raw || m.text) }] }))
+            ];
+            let res;
+            try {
+                res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || AI_DEFAULT_MODEL)}:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+                    body: JSON.stringify({ contents, generationConfig: { temperature: 0.2 } })
+                });
+            } catch (err) {
+                throw new Error('Could not reach Google\'s AI service. Check your internet connection and try again.');
+            }
+            let data = null;
+            try { data = await res.json(); } catch (err) { /* not JSON */ }
+            if (!res.ok) throw new Error(aiErrorMessage(res.status, data && data.error && data.error.message || ''));
+            const parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+            const text = parts ? parts.map(p => p.text || '').join('') : '';
+            if (!text) throw new Error('The AI did not return an answer. Try rephrasing your message.');
+            return text;
+        }
+
+        async function aiSend(e) {
+            e.preventDefault();
+            if (aiBusy || !canEditSchedule() || !(window.aiSettings && window.aiSettings.key)) return;
+            const input = document.getElementById('aiInput');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            aiChat.push({ role: 'user', text });
+            aiBusy = true;
+            renderAI();
+            try {
+                const history = aiChat.slice(-10);
+                const raw = await callGemini(history);
+                const parsed = aiParseReply(raw);
+                const entries = [], skipped = [];
+                parsed.entries.slice(0, 40).forEach(en => {
+                    const r = aiSanitizeEntry(en);
+                    if (r.item) entries.push({ item: r.item, checked: true });
+                    else skipped.push(r.problem);
+                });
+                // entries the chat already added earlier are not offered twice
+                aiChat.push({
+                    role: 'ai',
+                    text: parsed.reply || (entries.length ? `I found ${entries.length} inspection${entries.length > 1 ? 's' : ''}.` : 'I could not find any inspections in that.'),
+                    raw, entries, skipped
+                });
+            } catch (err) {
+                aiChat.push({ role: 'ai', text: err.message || 'Something went wrong. Please try again.', raw: '', entries: [] });
+            } finally {
+                aiBusy = false;
+                renderAI();
+                setTimeout(() => { const i = document.getElementById('aiInput'); if (i && !i.disabled) i.focus(); }, 30);
+            }
+        }
+
+        function aiAddEntries(msgIndex) {
+            const m = aiChat[msgIndex];
+            if (!m || m.added || !canEditSchedule()) return;
+            const chosen = m.entries.filter(en => en.checked).map(en => en.item);
+            if (!chosen.length) return;
+            const existing = window.appState.items;
+            let added = 0, dupes = 0;
+            chosen.forEach((it, k) => {
+                const dup = existing.some(e => e.day === it.day && Number(e.year) === it.year && e.section === it.section && e.time === it.time && e.room === it.room);
+                if (dup) { dupes++; return; }
+                existing.push({ id: `${Date.now()}${k}`, ...it });
+                added++;
+            });
+            m.added = true;
+            m.addedText = isCommitteeRole()
+                ? `Sent ${added} entr${added === 1 ? 'y' : 'ies'} to a Peace and Order Officer for approval.`
+                : `Added ${added} entr${added === 1 ? 'y' : 'ies'} to the schedule.`;
+            if (dupes) m.addedText += ` ${dupes} already existed and ${dupes === 1 ? 'was' : 'were'} skipped.`;
+            window.saveStateToCloud();
+            window.renderUI();
+            renderAI();
+            showToast(m.addedText, 'success');
+        }
+
         // ---- Login / sign-up forms ----
         function normalizeStudentNumber(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
         function validStudentNumber(sn) { return /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(sn) && sn.length >= 5 && sn.length <= 30; }
@@ -1794,7 +2138,7 @@
             commonStarted = false; deletingAccount = false;
             window.currentUser = null; window.allUsers = {}; window.proposals = {};
             window.announcements = {}; window.myNotifications = {}; window.policies = {};
-            window.noticesInbox = {}; window.noticesSent = {};
+            window.noticesInbox = {}; window.noticesSent = {}; window.aiSettings = null;
         }
 
         function failSignIn(message) {
@@ -1806,34 +2150,102 @@
         }
 
         // ---------- Live schedule ----------
+        // The schedule is stored in pieces so a year level representative can only ever change their own year:
+        //   rooms/<room>            : month, dates and saved records (officers/executives write this)
+        //   schedule/<room>/y1..y4  : the inspection entries of each year level
+        //                             (officers/executives write all of them, a representative writes only theirs)
+        let schedRef = null;
+        let cloudMeta = null;          // parsed rooms/<room>
+        let cloudMetaJson = null;      // exact text stored there
+        let cloudYears = {};           // year -> { items, json, writer }
+        let metaLoaded = false, yearsLoaded = false, firstApplied = false, migrationTried = false;
+
+        function assembleCloudState() {
+            if (!cloudMeta && Object.keys(cloudYears).length === 0) return null;
+            const meta = cloudMeta || {};
+            const legacy = Array.isArray(meta.items) ? meta.items : [];   // older versions kept every entry in one document
+            const items = [];
+            [1, 2, 3, 4].forEach(y => {
+                if (cloudYears[y]) items.push(...cloudYears[y].items);
+                else items.push(...legacy.filter(i => Number(i.year) === y));
+            });
+            return { month: meta.month, year: meta.year, dayDates: meta.dayDates, snapshots: meta.snapshots, items };
+        }
+
+        function onCloudData(foreign) {
+            if (!(metaLoaded && yearsLoaded)) return;
+            window.cloudConnected = true;
+            const state = assembleCloudState();
+
+            if (!state) {
+                // Nothing stored yet: an officer/executive seeds it with the current schedule
+                if (isAdminRole() && !migrationTried) { migrationTried = true; push(); }
+                else updateSyncBadge(true, "Cloud Sync Active");
+                return;
+            }
+
+            window.cloudBaseline = JSON.parse(JSON.stringify(state));
+            if (foreign || !firstApplied) {
+                firstApplied = true;
+                applyState(JSON.parse(JSON.stringify(state)));
+                saveToLocalCache();
+                window.renderUI();
+            }
+
+            // First officer to open the site after the update moves the old single document into the per-year layout
+            if (isAdminRole() && !migrationTried) {
+                const legacy = cloudMeta && Array.isArray(cloudMeta.items);
+                const missing = [1, 2, 3, 4].some(y => !cloudYears[y]);
+                if (legacy && missing) { migrationTried = true; push(); }
+            }
+            updateSyncBadge(true, "Cloud Sync Active");
+        }
+
         function startRoom() {
             if (roomRef) return;
             roomRef = ref(db, `rooms/${room()}`);
+            schedRef = ref(db, `schedule/${room()}`);
+            cloudMeta = null; cloudMetaJson = null; cloudYears = {};
+            metaLoaded = false; yearsLoaded = false; firstApplied = false; migrationTried = false;
 
             baseUnsubs.push(onValue(roomRef, (snap) => {
-                window.cloudConnected = true;
                 const val = snap.val();
-
-                if (!val || !val.json) {
-                    // Nothing stored yet: an officer/executive seeds it with the current schedule
-                    if (isAdminRole()) push();
-                    else updateSyncBadge(true, "Cloud Sync Active");
-                    return;
+                let foreign = true;
+                if (val && val.json) {
+                    try { cloudMeta = JSON.parse(val.json); cloudMetaJson = val.json; }
+                    catch (e) { console.warn('Bad data from cloud:', e); cloudMeta = null; cloudMetaJson = null; }
+                    foreign = val.writer !== clientId;
+                } else {
+                    cloudMeta = null; cloudMetaJson = null;
                 }
-                let cloudState = null;
-                try { cloudState = JSON.parse(val.json); } catch (e) { console.warn('Bad data from cloud:', e); }
-                if (cloudState) {
-                    window.cloudBaseline = cloudState;
-                    // Ignore the echo of our own save
-                    if (val.writer !== clientId) {
-                        applyState(JSON.parse(val.json));
-                        saveToLocalCache();
-                        window.renderUI();
-                    }
-                }
-                updateSyncBadge(true, "Cloud Sync Active");
+                metaLoaded = true;
+                onCloudData(foreign);
             }, (err) => {
                 console.warn('Firebase read error:', err);
+                updateSyncBadge(false, "Offline – Cached Locally");
+            }));
+
+            baseUnsubs.push(onValue(schedRef, (snap) => {
+                const all = snap.val() || {};
+                let foreign = false;
+                const next = {};
+                [1, 2, 3, 4].forEach(y => {
+                    const d = all['y' + y];
+                    if (d && d.json) {
+                        try {
+                            next[y] = { items: JSON.parse(d.json), json: d.json, writer: d.writer };
+                            const before = cloudYears[y];
+                            if ((!before || before.json !== d.json) && d.writer !== clientId) foreign = true;
+                        } catch (e) { console.warn('Bad year data from cloud:', e); }
+                    } else if (cloudYears[y]) {
+                        foreign = true;   // someone removed it
+                    }
+                });
+                cloudYears = next;
+                yearsLoaded = true;
+                onCloudData(foreign);
+            }, (err) => {
+                console.warn('Firebase read error (schedule):', err);
                 updateSyncBadge(false, "Offline – Cached Locally");
             }));
 
@@ -1843,23 +2255,56 @@
             }));
         }
 
-        // Debounced write of the whole schedule (officers/executives only; the database rules enforce this too)
+        function yearJson(items, y) {
+            return JSON.stringify(items.filter(i => Number(i.year) === y));
+        }
+
+        function pushFail(err) {
+            console.warn('Firebase write error (cached locally):', err);
+            updateSyncBadge(false, "Cached Locally");
+            showToast('Could not save to the cloud. Your change was not shared.', 'error');
+        }
+
+        // Officers/executives: write only the pieces that changed (the database rules enforce who may write what)
         function push() {
             if (!roomRef || !isAdminRole()) return;
             clearTimeout(pushTimer);
             updateSyncBadge(null, "Syncing...");
-            pushTimer = setTimeout(() => {
-                set(roomRef, {
-                    json: JSON.stringify(sharedState()),
-                    writer: clientId,
-                    updatedAt: serverTimestamp()
-                }).then(() => {
+            pushTimer = setTimeout(async () => {
+                try {
+                    const st = sharedState();
+                    const writes = [];
+                    [1, 2, 3, 4].forEach(y => {
+                        const json = yearJson(st.items, y);
+                        if (!cloudYears[y] || cloudYears[y].json !== json) {
+                            writes.push(set(ref(db, `schedule/${room()}/y${y}`), { json, writer: clientId, updatedAt: serverTimestamp() }));
+                        }
+                    });
+                    await Promise.all(writes);                       // entries first, so nothing disappears in between
+                    const metaJson = JSON.stringify({ month: st.month, year: st.year, dayDates: st.dayDates, snapshots: st.snapshots });
+                    if (cloudMetaJson !== metaJson) {
+                        await set(roomRef, { json: metaJson, writer: clientId, updatedAt: serverTimestamp() });
+                    }
                     updateSyncBadge(true, "Cloud Sync Active");
-                }).catch((err) => {
-                    console.warn('Firebase write error (cached locally):', err);
-                    updateSyncBadge(false, "Cached Locally");
-                    showToast('Could not save to the cloud. Your change was not shared.', 'error');
-                });
+                } catch (err) { pushFail(err); }
+            }, 250);
+        }
+
+        // Year level representative: write only my own year
+        function pushRepYear() {
+            const y = repYear();
+            if (!roomRef || !y) return;
+            clearTimeout(pushTimer);
+            updateSyncBadge(null, "Syncing...");
+            pushTimer = setTimeout(async () => {
+                try {
+                    const json = yearJson(sharedState().items, y);
+                    if (!cloudYears[y] || cloudYears[y].json !== json) {
+                        const cu = window.currentUser;
+                        await set(ref(db, `schedule/${room()}/y${y}`), { json, writer: clientId, updatedAt: serverTimestamp(), by: cu.uid, byName: cu.fullName });
+                    }
+                    updateSyncBadge(true, "Cloud Sync Active");
+                } catch (err) { pushFail(err); }
             }, 250);
         }
 
@@ -1889,6 +2334,16 @@
             } else {
                 window.proposals = {};
             }
+            // AI assistant settings (key and model) for everyone who can edit the schedule
+            if (admin || role === 'committee' || /^rep[1-4]$/.test(role)) {
+                roleUnsubs.push(onValue(ref(db, 'settings/ai'), (s) => {
+                    window.aiSettings = s.val() || null;
+                    updateAiUI();
+                }, (e) => console.warn('AI settings error:', e)));
+            } else {
+                window.aiSettings = null;
+            }
+
             // notices a sender has sent: committee sees their own, officers/executives see everyone's
             if (role === 'committee') {
                 roleUnsubs.push(onValue(ref(db, `violations/sent/${window.currentUser.uid}`), (s) => {
@@ -1979,7 +2434,8 @@
             await notify(uid, 'Your role was changed', `You are now ${ROLE_LABELS[role] || role}. Changed by ${window.currentUser.fullName}.`);
         };
 
-        window.cloudPush = push;
+        // Officers/executives save everything that changed; a year representative saves only their year
+        window.cloudPush = () => { if (isAdminRole()) push(); else if (isRepRole()) pushRepYear(); };
 
         // ---------- Announcements, notifications and documents (everyone signed in) ----------
         function startCommon() {
@@ -2112,6 +2568,12 @@
                 a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
             },
+
+            // AI assistant: the key is kept in the database where only schedule editors can read it
+            saveAiSettings: ({ key, model }) => set(ref(db, 'settings/ai'), {
+                key, model, updatedBy: window.currentUser.uid, updatedAt: serverTimestamp()
+            }),
+            clearAiSettings: () => remove(ref(db, 'settings/ai')),
 
             // Private violation notices: one copy for the student, one for the sender
             // (officers/executives can read every sender copy)
@@ -2340,7 +2802,7 @@
                     </button>
                 </div>
             `;
-            if (!canModify()) card.querySelector('[data-actions]')?.remove();
+            if (!canEditItem(item)) card.querySelector('[data-actions]')?.remove();
             return card;
         }
 
@@ -2354,7 +2816,7 @@
 
         // Clickable status pill: changing it updates the schedule directly (no Edit modal needed)
         function statusPicker(item) {
-            if (!canModify()) {
+            if (!canEditItem(item)) {
                 return `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[item.status] || ''}">${esc(item.status)}</span>`;
             }
             const options = STATUS_OPTIONS.map(s =>
@@ -2365,7 +2827,7 @@
         }
 
         function setItemStatus(id, status) {
-            if (!canModify()) return;
+            if (!canEditItem(window.appState.items.find(i => i.id === id))) return;
             if (!STATUS_OPTIONS.includes(status)) return;
             const item = (window.appState.items || []).find(i => i.id === id);
             if (!item || item.status === status) return;
@@ -2494,7 +2956,7 @@
                         <button onclick="deleteItem('${item.id}')" class="text-rose-600 hover:text-rose-800 dark:text-rose-400 font-bold"><svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
                     </td>
                 `;
-                if (!canModify()) tr.querySelector('[data-actions]').innerHTML = '';
+                if (!canEditItem(item)) tr.querySelector('[data-actions]').innerHTML = '';
                 tbody.appendChild(tr);
             });
         }
@@ -2549,11 +3011,14 @@
 
         // Modal Handlers
         function openModal(itemId = null) {
-            if (!canModify()) return;
-            document.getElementById('modalSubmitBtn').textContent = isAdminRole() ? 'Save Schedule' : 'Submit for Approval';
+            if (!canEditSchedule()) return;
+            if (itemId && !canEditItem(window.appState.items.find(i => i.id === itemId))) return;
+            document.getElementById('modalSubmitBtn').textContent = isCommitteeRole() ? 'Submit for Approval' : 'Save Schedule';
             const modal = document.getElementById('scheduleModal');
             const form = document.getElementById('inspectionForm');
             form.reset();
+            const yearSel = document.getElementById('itemYear');
+            yearSel.disabled = false;
 
             if (itemId) {
                 document.getElementById('modalTitle').textContent = "Edit Inspection Schedule";
@@ -2580,6 +3045,8 @@
                 document.getElementById('modalTitle').textContent = "Add Inspection Schedule";
                 document.getElementById('itemId').value = '';
             }
+            // a year level representative can only work on their own year
+            if (isRepRole()) { yearSel.value = String(repYear()); yearSel.disabled = true; }
             modal.classList.remove('hidden');
         }
 
@@ -2589,10 +3056,12 @@
 
         function handleFormSubmit(e) {
             e.preventDefault();
-            if (!canModify()) return;
+            if (!canEditSchedule()) return;
             const id = document.getElementById('itemId').value || Date.now().toString();
+            const existingItem = window.appState.items.find(i => i.id === id);
+            if (existingItem && !canEditItem(existingItem)) return;
             const day = document.getElementById('itemDay').value;
-            const year = parseInt(document.getElementById('itemYear').value);
+            const year = isRepRole() ? repYear() : parseInt(document.getElementById('itemYear').value);
             const section = document.getElementById('itemSection').value;
             const room = document.getElementById('itemRoom').value.trim() || 'TBA';
             const status = document.getElementById('itemStatus').value;
@@ -2649,7 +3118,7 @@
         });
 
         function deleteItem(id) {
-            if (!canModify()) return;
+            if (!canEditItem(window.appState.items.find(i => i.id === id))) return;
             const item = window.appState.items.find(i => i.id === id);
             const detail = item
                 ? ` (${ordinal(item.year)} Year ${item.section}, ${getDayFullName(item.day)} ${item.time}, ${item.room})`
@@ -3267,6 +3736,57 @@
                 <p class="text-[11px] text-slate-500 dark:text-slate-400">Use the Role box to make someone a co-admin (Executive Officer or Peace and Order Officer) or to change their access. You cannot change your own role.</p>
             </div>
             <div id="membersList" class="p-4 overflow-y-auto space-y-2 custom-scrollbar"></div>
+        </div>
+    </div>
+    <!-- AI SCHEDULE ASSISTANT -->
+    <div id="aiModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm" onclick="if (event.target === this) closeAI()">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl h-[88vh] max-h-[760px] flex flex-col border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="bg-[#2E1A47] px-5 py-3 border-b-2 border-[#FFD700] flex justify-between items-center">
+                <div>
+                    <h3 class="font-extrabold text-sm text-[#FFD700] uppercase tracking-wide">AI Schedule Assistant</h3>
+                    <p id="aiSubtitle" class="text-[11px] text-purple-200"></p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="aiSettingsLink" type="button" onclick="aiToggleSettings()" class="hidden text-[11px] font-bold text-amber-300 hover:underline">AI settings</button>
+                    <button onclick="closeAI()" class="text-slate-300 hover:text-white text-lg" title="Close">
+                        <svg class="shrink-0" width="1em" height="1em" style="vertical-align:-0.125em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Setup / settings (officers and executives) -->
+            <form id="aiSettingsForm" onsubmit="aiSaveSettings(event)" class="hidden p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 space-y-3" novalidate>
+                <p class="text-xs text-slate-600 dark:text-slate-300">Paste a Gemini API key from Google AI Studio (aistudio.google.com/apikey). It is saved in your database and only people who can edit the schedule can use it.</p>
+                <div>
+                    <label for="aiKeyInput" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">API key</label>
+                    <input id="aiKeyInput" type="password" autocomplete="off" placeholder="Paste your key here"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    <p id="aiKeyHint" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400"></p>
+                </div>
+                <div>
+                    <label for="aiModelInput" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Model name</label>
+                    <input id="aiModelInput" type="text" autocomplete="off"
+                        class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Google renames models from time to time. If the assistant says the model was not found, put the current Flash model name here.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button id="aiSaveBtn" type="submit" class="flex-1 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Save</button>
+                    <button id="aiRemoveBtn" type="button" onclick="aiRemoveSettings()" class="hidden px-4 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white font-bold py-2 rounded-lg text-xs transition">Remove key</button>
+                </div>
+            </form>
+
+            <div id="aiNotReady" class="hidden p-6 text-center text-sm text-slate-600 dark:text-slate-300"></div>
+
+            <div id="aiMessages" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar"></div>
+
+            <form id="aiForm" onsubmit="aiSend(event)" class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                <div class="flex gap-2 items-end">
+                    <textarea id="aiInput" rows="2" maxlength="3000" placeholder="Type or paste your schedule, e.g. 2nd Year Alpha Monday 10am RM 404, Bravo Tuesday 1pm RM 405"
+                        class="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none resize-none"></textarea>
+                    <button id="aiSendBtn" type="submit" class="shrink-0 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold px-4 py-2.5 rounded-lg text-xs border border-amber-400/40 shadow transition">Send</button>
+                </div>
+                <p class="mt-1 text-[10px] text-slate-400">Don't type personal information. Your message is sent to Google's Gemini service to read the schedule.</p>
+            </form>
         </div>
     </div>
 </body>

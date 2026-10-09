@@ -14,10 +14,10 @@
           ".validate": "newData.isString() && newData.val().length >= 5 && newData.val().length <= 30 && (data.exists() || newData.val().toLowerCase() + '@plmar-criminology.app' === auth.token.email)"
         },
         "role": {
-          ".validate": "(newData.val() === 'student' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive') && (newData.val() === 'student' || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))"
+          ".validate": "(newData.val() === 'student' || newData.val() === 'rep1' || newData.val() === 'rep2' || newData.val() === 'rep3' || newData.val() === 'rep4' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive') && (newData.val() === 'student' || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))"
         },
         "requestedRole": {
-          ".validate": "(newData.val() === 'student' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive')"
+          ".validate": "(newData.val() === 'student' || newData.val() === 'rep1' || newData.val() === 'rep2' || newData.val() === 'rep3' || newData.val() === 'rep4' || newData.val() === 'committee' || newData.val() === 'officer' || newData.val() === 'executive')"
         },
         "createdAt": {
           ".validate": "newData.isNumber()"
@@ -103,6 +103,22 @@
             ".validate": "newData.hasChildren(['to', 'toName', 'toSN', 'from', 'fromName', 'title', 'details', 'incidentDate', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 120 && newData.child('details').isString() && newData.child('details').val().length >= 3 && newData.child('details').val().length <= 2000 && (!newData.child('action').exists() || (newData.child('action').isString() && newData.child('action').val().length <= 500)) && newData.child('from').val() === $sender"
           }
         }
+      }
+    },
+    "schedule": {
+      "$room": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+        "$y": {
+          ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || ($y === 'y1' && root.child('users').child(auth.uid).child('role').val() === 'rep1') || ($y === 'y2' && root.child('users').child(auth.uid).child('role').val() === 'rep2') || ($y === 'y3' && root.child('users').child(auth.uid).child('role').val() === 'rep3') || ($y === 'y4' && root.child('users').child(auth.uid).child('role').val() === 'rep4'))",
+          ".validate": "($y === 'y1' || $y === 'y2' || $y === 'y3' || $y === 'y4') && newData.hasChildren(['json', 'writer', 'updatedAt']) && newData.child('json').isString() && newData.child('json').val().length <= 600000"
+        }
+      }
+    },
+    "settings": {
+      "ai": {
+        ".read": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee' || (root.child('users').child(auth.uid).child('role').val() === 'rep1' || root.child('users').child(auth.uid).child('role').val() === 'rep2' || root.child('users').child(auth.uid).child('role').val() === 'rep3' || root.child('users').child(auth.uid).child('role').val() === 'rep4'))",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
+        ".validate": "newData.hasChildren(['key', 'model']) && newData.child('key').isString() && newData.child('key').val().length >= 20 && newData.child('key').val().length <= 300 && newData.child('model').isString() && newData.child('model').val().length >= 3 && newData.child('model').val().length <= 80"
       }
     }
   }
