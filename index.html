@@ -593,7 +593,7 @@
         function currentRole() { return window.currentUser ? window.currentUser.role : null; }
         function isAdminRole() { const r = currentRole(); return r === 'executive' || r === 'officer'; }
         function isCommitteeRole() { return currentRole() === 'committee'; }
-        // Executives/officers/committee (staff): approvals, announcements, uploads, notices
+        // Executives/officers/committee (staff): approvals, announcements, uploads
         function canModify() { return isAdminRole() || isCommitteeRole(); }
 
         // Year level representatives (1st to 4th year): may add and edit the inspection schedule of their own year only
@@ -834,6 +834,7 @@
                         <div class="min-w-0">
                             <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(u.fullName)}${mine ? ' <span class="text-[10px] font-bold text-purple-700 dark:text-amber-300">(You)</span>' : ''}</div>
                             <div class="text-[11px] text-slate-500 dark:text-slate-400">${esc(u.studentNumber)}</div>
+                            ${u.email ? `<div class="text-[11px] text-slate-400 break-all">${esc(u.email)}${u.emailNotify === false ? ' (emails off)' : ''}</div>` : ''}
                             <div class="mt-1 flex flex-wrap gap-1">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${roleStyle[u.role] || ''}">${esc(ROLE_LABELS[u.role] || u.role)}</span>
                                 ${waiting ? `<span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">Requested: ${esc(ROLE_LABELS[u.requestedRole] || u.requestedRole)}</span>` : ''}
@@ -1082,7 +1083,7 @@
 
         const MAX_POLICY_BYTES = 3 * 1024 * 1024;
         const POLICY_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'png', 'jpg', 'jpeg'];
-        const ACC_TABS = ['account', 'security', 'alerts', 'notices', 'files'];
+        const ACC_TABS = ['account', 'security', 'alerts', 'files'];
         let accountTab = 'account';
 
         function fmtBytes(n) {
@@ -1127,13 +1128,12 @@
             ACC_TABS.forEach(t => {
                 document.getElementById('accPanel-' + t).classList.toggle('hidden', t !== tab);
                 document.getElementById('accTab-' + t).className =
-                    'flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide transition ' +
+                    'flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide transition ' +
                     (t === tab ? 'text-[#2E1A47] dark:text-[#FFD700] border-b-2 border-[#FFD700] bg-white dark:bg-slate-800'
                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white');
             });
             if (tab === 'account') fillAccountForm(true);
             if (tab === 'alerts') renderAlerts();
-            if (tab === 'notices') renderNotices();
             if (tab === 'files') renderFiles();
         }
 
@@ -1151,6 +1151,8 @@
             const waiting = u.requestedRole && u.requestedRole !== u.role;
             pending.textContent = waiting ? `Your request for ${ROLE_LABELS[u.requestedRole] || u.requestedRole} access is waiting for approval.` : '';
             pending.classList.toggle('hidden', !waiting);
+            fillEmailForm(force);
+            fillMailAdmin();
         }
 
         async function saveProfile(e) {
@@ -1213,7 +1215,7 @@
             const seen = getAnnSeen();
             const a = annList().filter(x => (x.createdAt || 0) > seen && x.by !== myUid()).length;
             const n = notifList().filter(x => x.read !== true).length;
-            return a + n + unackedCount();
+            return a + n;
         }
 
         function updateAlertsUI() {
@@ -1224,12 +1226,7 @@
                 b.textContent = n;
                 b.classList.toggle('hidden', n === 0);
             });
-            const nb = document.getElementById('tabNoticesBadge');
-            const un = unackedCount();
-            nb.textContent = un;
-            nb.classList.toggle('hidden', un === 0);
             if (accountOpen() && accountTab === 'alerts') renderAlerts();
-            if (accountOpen() && accountTab === 'notices') renderNotices();
         }
 
         function markAlertsSeen() {
@@ -1242,7 +1239,6 @@
         function markAllRead() { markAlertsSeen(); }
 
         function renderAlerts() {
-            renderNoticeAlertCard();
             const seen = getAnnSeen();
             const newPill = '<span class="ml-2 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black uppercase">New</span>';
 
@@ -1297,6 +1293,7 @@
                 await window.cloudApi.postAnnouncement({ title, body });
                 document.getElementById('annComposer').reset();
                 showToast('Announcement posted.', 'success');
+                sendMail('announce', Object.entries(window.allUsers || {}).filter(([uid]) => uid !== myUid()).map(([uid, u]) => u));
             } catch (err) {
                 showToast('Could not post the announcement. Please try again.', 'error');
             } finally {
@@ -1416,170 +1413,6 @@
             });
         }
 
-        // ---- Private violation notices ----
-        window.noticesInbox = {};   // id -> notice sent to me
-        window.noticesSent = {};    // id -> notices I sent (officers/executives: everyone's)
-
-        function noticeInboxList() {
-            return Object.entries(window.noticesInbox || {}).map(([id, n]) => ({ id, ...n }))
-                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        }
-        function noticeSentArr() {
-            return Object.entries(window.noticesSent || {}).map(([id, n]) => ({ id, ...n }))
-                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        }
-        function unackedCount() { return noticeInboxList().filter(n => !n.ackAt).length; }
-
-        function fmtIncidentDate(str) {
-            if (!str) return '';
-            const d = new Date(str + 'T00:00:00');
-            return isNaN(d) ? str : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        }
-
-        function updateNoticesUI() {
-            if (accountOpen() && accountTab === 'notices') renderNotices();
-        }
-
-        // Shortcut card at the top of the Alerts tab when a notice needs acknowledging
-        function renderNoticeAlertCard() {
-            const el = document.getElementById('noticeAlertCard');
-            const n = unackedCount();
-            el.innerHTML = n
-                ? `<button type="button" onclick="setAccountTab('notices')" class="w-full text-left rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 px-4 py-3 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-950/50 transition">
-                       You have ${n} violation notice${n > 1 ? 's' : ''} to read and acknowledge. Tap to open Notices.
-                   </button>`
-                : '';
-        }
-
-        // Student picker for the sender (search + list)
-        function renderNoticeRecipients() {
-            const sel = document.getElementById('noticeTo');
-            if (!sel) return;
-            const keep = sel.value;
-            const q = document.getElementById('noticeSearch').value.trim().toLowerCase();
-            const me = myUid();
-            const people = Object.entries(window.allUsers || {})
-                .filter(([uid, u]) => uid !== me && u && (!q ||
-                    String(u.fullName || '').toLowerCase().includes(q) || String(u.studentNumber || '').toLowerCase().includes(q)))
-                .sort((a, b) => String(a[1].fullName).localeCompare(String(b[1].fullName)));
-            sel.innerHTML = '';
-            people.forEach(([uid, u]) => {
-                const opt = new Option(`${u.fullName} (${u.studentNumber})`, uid);
-                sel.appendChild(opt);
-            });
-            if (keep && people.some(([uid]) => uid === keep)) sel.value = keep;
-        }
-
-        function noticeCard(n, mode) {
-            const when = esc(fmtDate(n.createdAt));
-            if (mode === 'inbox') {
-                const acked = !!n.ackAt;
-                return `
-                <div class="rounded-lg border p-3 ${acked ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900' : 'border-rose-300 bg-rose-50 dark:bg-rose-950/20'}">
-                    <div class="flex items-start justify-between gap-2">
-                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(n.title)}</div>
-                        <span class="shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase ${acked ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-600 text-white'}">${acked ? 'Acknowledged' : 'New'}</span>
-                    </div>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Incident date: ${esc(fmtIncidentDate(n.incidentDate))}</div>
-                    <div class="text-xs text-slate-700 dark:text-slate-200 mt-2 whitespace-pre-line break-words">${esc(n.details)}</div>
-                    ${n.action ? `<div class="mt-2 text-xs text-slate-700 dark:text-slate-200"><span class="font-bold">Action required:</span> ${esc(n.action)}</div>` : ''}
-                    <div class="text-[10px] text-slate-400 mt-2">From ${esc(n.fromName)} (${esc(ROLE_LABELS[n.fromRole] || n.fromRole || '')}) · ${when}</div>
-                    ${acked
-                        ? `<div class="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">You acknowledged this on ${esc(fmtDate(n.ackAt))}</div>`
-                        : `<button type="button" onclick="acknowledgeNotice('${esc(n.id)}')" class="mt-2 px-3 py-1.5 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] rounded-lg text-[11px] font-bold">I have read this notice</button>`}
-                </div>`;
-            }
-            // sent list (sender / officers)
-            const canRetract = isAdminRole() || n.from === myUid();
-            return `
-            <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3">
-                <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0">
-                        <div class="text-xs font-extrabold text-slate-800 dark:text-slate-100 break-words">${esc(n.title)}</div>
-                        <div class="text-[11px] text-slate-600 dark:text-slate-300">To ${esc(n.toName)} (${esc(n.toSN)})</div>
-                    </div>
-                    <span class="shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase ${n.ackAt ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}">${n.ackAt ? 'Acknowledged' : 'Not yet read'}</span>
-                </div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Incident date: ${esc(fmtIncidentDate(n.incidentDate))}</div>
-                <div class="text-xs text-slate-700 dark:text-slate-200 mt-2 whitespace-pre-line break-words">${esc(n.details)}</div>
-                ${n.action ? `<div class="mt-2 text-xs text-slate-700 dark:text-slate-200"><span class="font-bold">Action required:</span> ${esc(n.action)}</div>` : ''}
-                <div class="text-[10px] text-slate-400 mt-2">${isAdminRole() ? `Sent by ${esc(n.fromName)} · ` : ''}${when}${n.ackAt ? ` · Acknowledged ${esc(fmtDate(n.ackAt))}` : ''}</div>
-                ${canRetract ? `<button type="button" onclick="retractNotice('${esc(n.id)}')" class="mt-2 px-3 py-1.5 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white rounded-lg text-[11px] font-bold transition">Delete notice</button>` : ''}
-            </div>`;
-        }
-
-        function renderNotices() {
-            const inbox = noticeInboxList();
-            document.getElementById('noticeInbox').innerHTML = inbox.length === 0
-                ? '<p class="text-xs text-slate-400 italic">You have no violation notices.</p>'
-                : inbox.map(n => noticeCard(n, 'inbox')).join('');
-
-            if (canModify()) {
-                renderNoticeRecipients();
-                const sent = noticeSentArr();
-                document.getElementById('noticeSentTitle').textContent = isAdminRole() ? `All notices sent (${sent.length})` : `Notices I sent (${sent.length})`;
-                document.getElementById('noticeSent').innerHTML = sent.length === 0
-                    ? '<p class="text-xs text-slate-400 italic">No notices sent yet.</p>'
-                    : sent.map(n => noticeCard(n, 'sent')).join('');
-            }
-        }
-
-        function submitNotice(e) {
-            e.preventDefault();
-            if (!canModify() || !window.cloudApi) return;
-            const toUid = document.getElementById('noticeTo').value;
-            const person = (window.allUsers || {})[toUid];
-            const title = document.getElementById('noticeTitle').value.trim();
-            const incidentDate = document.getElementById('noticeDate').value;
-            const details = document.getElementById('noticeDetails').value.trim();
-            const action = document.getElementById('noticeAction').value.trim();
-            if (!person) { showToast('Choose the student first.', 'error'); return; }
-            if (title.length < 3) { showToast('Enter what the violation is.', 'error'); return; }
-            if (!incidentDate) { showToast('Choose the date of the incident.', 'error'); return; }
-            if (details.length < 5) { showToast('Add the details of what happened.', 'error'); return; }
-
-            askConfirm({
-                title: 'Send Violation Notice',
-                message: `Send this violation notice to ${person.fullName} (${person.studentNumber})?\n\nOnly that student, you and the Executive / Peace and Order Officers will be able to see it.`,
-                confirmText: 'Yes, Send',
-                danger: false,
-                onConfirm: () => {
-                    const btn = document.getElementById('noticeSendBtn');
-                    setBtnBusy(btn, true, 'Sending...');
-                    const payload = { to: toUid, toName: person.fullName, toSN: person.studentNumber, title, incidentDate, details };
-                    if (action) payload.action = action;
-                    window.cloudApi.sendNotice(payload).then(
-                        () => {
-                            document.getElementById('noticeForm').reset();
-                            showToast(`Notice sent privately to ${person.fullName}.`, 'success');
-                        },
-                        () => showToast('Could not send the notice. Please try again.', 'error')
-                    ).finally(() => setBtnBusy(btn, false));
-                }
-            });
-        }
-
-        function acknowledgeNotice(id) {
-            const n = (window.noticesInbox || {})[id];
-            if (!n || n.ackAt || !window.cloudApi) return;
-            window.cloudApi.ackNotice(id, n.from).then(
-                () => showToast('Thank you. The sender can now see that you read it.', 'success'),
-                () => showToast('Could not save your acknowledgement. Please try again.', 'error'));
-        }
-
-        function retractNotice(id) {
-            const n = (window.noticesSent || {})[id];
-            if (!n) return;
-            askConfirm({
-                title: 'Delete Notice',
-                message: `Delete the notice "${n.title}" sent to ${n.toName}? The student will no longer see it.`,
-                confirmText: 'Yes, Delete',
-                onConfirm: () => window.cloudApi.retractNotice(id, n.to, n.from).then(
-                    () => showToast('Notice deleted.', 'success'),
-                    () => showToast('Could not delete the notice.', 'error'))
-            });
-        }
-
         // ---- Delete my account ----
         function openDeleteAccount() {
             if (isAdminRole()) {
@@ -1628,8 +1461,6 @@
             const modify = canModify();
             document.getElementById('annComposer').classList.toggle('hidden', !modify);
             document.getElementById('uploadForm').classList.toggle('hidden', !modify);
-            document.getElementById('noticeForm').classList.toggle('hidden', !modify);
-            document.getElementById('noticeSentWrap').classList.toggle('hidden', !modify);
             if (accountOpen() && accountTab === 'account') fillAccountForm(false);
             updateAlertsUI();
             renderFiles();
@@ -1931,6 +1762,119 @@ Rules:
             showToast(m.addedText, 'success');
         }
 
+        // ================= EMAIL NOTIFICATIONS =================
+        // Emails are only a nudge ("something is waiting, please log in"). They never contain notice or schedule details.
+        window.mailSettings = null;       // { url, secret } for people who send notifications (officers, executives, committee)
+
+        function mailReady() { return !!(window.mailSettings && window.mailSettings.url && window.mailSettings.secret); }
+        function wantsEmail(u) { return !!(u && u.email && u.emailNotify !== false); }
+        function adminPeople() {
+            const me = myUid();
+            return Object.entries(window.allUsers || {})
+                .filter(([uid, u]) => uid !== me && u && (u.role === 'executive' || u.role === 'officer'))
+                .map(([uid, u]) => u);
+        }
+
+        // Fire and forget: the relay is a Google Apps Script, so the answer cannot be read from the browser
+        function sendMail(kind, people) {
+            if (!mailReady()) return;
+            const list = (people || []).filter(wantsEmail)
+                .map(u => ({ email: u.email, name: String(u.fullName || '').slice(0, 60) }));
+            if (!list.length) return;
+            try {
+                fetch(window.mailSettings.url, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                    body: JSON.stringify({ secret: window.mailSettings.secret, kind, people: list })
+                }).catch(() => {});
+            } catch (err) { /* never block the real action because of email */ }
+        }
+
+        function fillEmailForm(force) {
+            const u = window.currentUser;
+            if (!u) return;
+            const input = document.getElementById('accEmail');
+            if (force || document.activeElement !== input) input.value = u.email || '';
+            document.getElementById('accEmailNotify').checked = u.emailNotify !== false;
+            document.getElementById('emailState').textContent = u.email
+                ? (u.emailNotify === false ? 'Saved, but email notifications are turned off.' : 'Email notifications are on.')
+                : 'No email saved yet.';
+        }
+
+        async function saveEmailSettings(e) {
+            e.preventDefault();
+            if (!window.cloudApi) { showToast('Not connected yet. Please try again.', 'error'); return; }
+            const email = document.getElementById('accEmail').value.trim();
+            const notify = document.getElementById('accEmailNotify').checked;
+            if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('That email address does not look right.', 'error'); return; }
+            if (email.length > 120) { showToast('That email address is too long.', 'error'); return; }
+            const btn = document.getElementById('emailSaveBtn');
+            setBtnBusy(btn, true, 'Saving...');
+            try {
+                await window.cloudApi.updateEmail(email, notify);
+                showToast(email ? 'Email settings saved.' : 'Email removed.', 'success');
+            } catch (err) {
+                showToast('Could not save your email settings. Please try again.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        // ---- officers/executives: connect the email relay ----
+        function fillMailAdmin() {
+            document.getElementById('mailAdminBox').classList.toggle('hidden', !isAdminRole());
+            if (!isAdminRole()) return;
+            const ms = window.mailSettings;
+            document.getElementById('mailUrl').value = ms ? ms.url : '';
+            document.getElementById('mailSecret').value = '';
+            document.getElementById('mailStatus').textContent = mailReady()
+                ? 'Email sending is ON. Leave the secret empty to keep the saved one.'
+                : 'Email sending is OFF. Nobody receives emails until this is set up.';
+            document.getElementById('mailRemoveBtn').classList.toggle('hidden', !mailReady());
+        }
+
+        async function saveMailSettings(e) {
+            e.preventDefault();
+            if (!isAdminRole() || !window.cloudApi) return;
+            const url = document.getElementById('mailUrl').value.trim();
+            const secret = document.getElementById('mailSecret').value.trim() || (window.mailSettings && window.mailSettings.secret) || '';
+            if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)) {
+                showToast('That does not look like a Web app URL. It should start with https://script.google.com/macros/s/ and end with /exec', 'error'); return;
+            }
+            if (secret.length < 8) { showToast('Enter the same secret you wrote in the script (at least 8 characters).', 'error'); return; }
+            const btn = document.getElementById('mailSaveBtn');
+            setBtnBusy(btn, true, 'Saving...');
+            try {
+                await window.cloudApi.saveMailSettings({ url, secret });
+                showToast('Email sending saved.', 'success');
+            } catch (err) {
+                showToast('Could not save. Check that the database rules are published.', 'error');
+            } finally {
+                setBtnBusy(btn, false);
+            }
+        }
+
+        function removeMailSettings() {
+            if (!isAdminRole() || !window.cloudApi) return;
+            askConfirm({
+                title: 'Turn Off Email',
+                message: 'Remove the email connection? Nobody will receive email notifications until it is set up again.',
+                confirmText: 'Yes, Turn Off',
+                onConfirm: () => window.cloudApi.clearMailSettings().then(
+                    () => showToast('Email sending turned off.', 'success'),
+                    () => showToast('Could not turn it off.', 'error'))
+            });
+        }
+
+        function sendTestMail() {
+            const me = window.currentUser;
+            if (!mailReady()) { showToast('Save the email connection first.', 'error'); return; }
+            if (!me || !me.email) { showToast('Save your own email above first, then send the test.', 'error'); return; }
+            sendMail('test', [{ ...me, emailNotify: true }]);
+            showToast('Test email requested. Check your inbox (and spam) in a minute.', 'success');
+        }
+
         // ---- Login / sign-up forms ----
         function normalizeStudentNumber(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
         function validStudentNumber(sn) { return /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(sn) && sn.length >= 5 && sn.length <= 30; }
@@ -2138,7 +2082,7 @@ Rules:
             commonStarted = false; deletingAccount = false;
             window.currentUser = null; window.allUsers = {}; window.proposals = {};
             window.announcements = {}; window.myNotifications = {}; window.policies = {};
-            window.noticesInbox = {}; window.noticesSent = {}; window.aiSettings = null;
+            window.aiSettings = null; window.mailSettings = null;
         }
 
         function failSignIn(message) {
@@ -2320,7 +2264,6 @@ Rules:
                 roleUnsubs.push(onValue(ref(db, 'users'), (s) => {
                     window.allUsers = s.val() || {};
                     updateApprovalsUI();
-                    updateNoticesUI();
                 }, (e) => console.warn('Users list error:', e)));
             } else {
                 window.allUsers = {};
@@ -2344,22 +2287,16 @@ Rules:
                 window.aiSettings = null;
             }
 
-            // notices a sender has sent: committee sees their own, officers/executives see everyone's
-            if (role === 'committee') {
-                roleUnsubs.push(onValue(ref(db, `violations/sent/${window.currentUser.uid}`), (s) => {
-                    window.noticesSent = s.val() || {};
-                    updateNoticesUI();
-                }, (e) => console.warn('Sent notices error:', e)));
-            } else if (admin) {
-                roleUnsubs.push(onValue(ref(db, 'violations/sent'), (s) => {
-                    const all = {};
-                    Object.values(s.val() || {}).forEach(bySender => Object.assign(all, bySender));
-                    window.noticesSent = all;
-                    updateNoticesUI();
-                }, (e) => console.warn('Sent notices error:', e)));
+            // email relay connection (needed by whoever triggers notifications)
+            if (admin || role === 'committee') {
+                roleUnsubs.push(onValue(ref(db, 'settings/mail'), (s) => {
+                    window.mailSettings = s.val() || null;
+                    if (accountOpen() && accountTab === 'account') fillMailAdmin();
+                }, (e) => console.warn('Email settings error:', e)));
             } else {
-                window.noticesSent = {};
+                window.mailSettings = null;
             }
+
             updateApprovalsUI();
         }
 
@@ -2378,6 +2315,7 @@ Rules:
                     createdAt: serverTimestamp()
                 });
             }));
+            sendMail('approval', adminPeople());   // email the officers that something is waiting
         };
 
         // Tell a person (via their notifications list) what happened to their request
@@ -2412,6 +2350,7 @@ Rules:
                 await notify(p.by,
                     status === 'approved' ? 'Change approved' : 'Change not approved',
                     `${what}\nReviewed by ${cu.fullName}.`);
+                sendMail('change', [(window.allUsers || {})[p.by]]);
             }
         };
 
@@ -2424,6 +2363,7 @@ Rules:
                 approve ? 'Access approved' : 'Access request not approved',
                 approve ? `You now have ${wanted} access.`
                         : `Your request for ${wanted} access was not approved. You remain ${ROLE_LABELS[u.role] || u.role}.`);
+            sendMail('access', [u]);
         };
 
         // Officers/executives set anyone's role (this is how co-admins are assigned)
@@ -2432,6 +2372,7 @@ Rules:
             if (!u) throw new Error('Unknown account');
             await update(ref(db, 'users/' + uid), { role, requestedRole: role });
             await notify(uid, 'Your role was changed', `You are now ${ROLE_LABELS[role] || role}. Changed by ${window.currentUser.fullName}.`);
+            sendMail('role', [u]);
         };
 
         // Officers/executives save everything that changed; a year representative saves only their year
@@ -2457,12 +2398,6 @@ Rules:
                 window.policies = s.val() || {};
                 renderFiles();
             }, (e) => console.warn('Documents error:', e)));
-
-            // violation notices sent to me (private)
-            baseUnsubs.push(onValue(ref(db, `violations/inbox/${uid}`), (s) => {
-                window.noticesInbox = s.val() || {};
-                updateAlertsUI();
-            }, (e) => console.warn('Notices error:', e)));
         }
 
         function stopLiveListeners() {
@@ -2569,38 +2504,25 @@ Rules:
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
             },
 
+            // My own email address for notifications (stored on my profile)
+            updateEmail: async (email, notify) => {
+                const uid = window.currentUser.uid;
+                if (email) await set(ref(db, `users/${uid}/email`), email);
+                else await remove(ref(db, `users/${uid}/email`));
+                await set(ref(db, `users/${uid}/emailNotify`), !!notify);
+            },
+
+            // The Google Apps Script relay that actually sends the emails (officers/executives set it up)
+            saveMailSettings: ({ url, secret }) => set(ref(db, 'settings/mail'), {
+                url, secret, updatedBy: window.currentUser.uid, updatedAt: serverTimestamp()
+            }),
+            clearMailSettings: () => remove(ref(db, 'settings/mail')),
+
             // AI assistant: the key is kept in the database where only schedule editors can read it
             saveAiSettings: ({ key, model }) => set(ref(db, 'settings/ai'), {
                 key, model, updatedBy: window.currentUser.uid, updatedAt: serverTimestamp()
             }),
             clearAiSettings: () => remove(ref(db, 'settings/ai')),
-
-            // Private violation notices: one copy for the student, one for the sender
-            // (officers/executives can read every sender copy)
-            sendNotice: async (n) => {
-                const cu = window.currentUser;
-                const id = dbPush(ref(db, `violations/inbox/${n.to}`)).key;
-                const record = { ...n, from: cu.uid, fromName: cu.fullName, fromRole: cu.role, createdAt: serverTimestamp() };
-                await set(ref(db, `violations/inbox/${n.to}/${id}`), record);
-                try {
-                    await set(ref(db, `violations/sent/${cu.uid}/${id}`), record);
-                } catch (err) {
-                    await remove(ref(db, `violations/inbox/${n.to}/${id}`)).catch(() => {});
-                    throw err;
-                }
-            },
-
-            // The student confirms they read it; the sender's copy is stamped too
-            ackNotice: async (id, fromUid) => {
-                const uid = window.currentUser.uid;
-                await set(ref(db, `violations/inbox/${uid}/${id}/ackAt`), serverTimestamp());
-                await set(ref(db, `violations/sent/${fromUid}/${id}/ackAt`), serverTimestamp()).catch(() => {});
-            },
-
-            retractNotice: async (id, toUid, fromUid) => {
-                await remove(ref(db, `violations/inbox/${toUid}/${id}`));
-                await remove(ref(db, `violations/sent/${fromUid}/${id}`));
-            },
 
             // The file is removed first, while the info record still proves who owns it
             deletePolicy: async (id) => {
@@ -3524,11 +3446,10 @@ Rules:
         </div>
 
         <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-            <button id="accTab-account" onclick="setAccountTab('account')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Account</button>
-            <button id="accTab-security" onclick="setAccountTab('security')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Security</button>
-            <button id="accTab-alerts" onclick="setAccountTab('alerts')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Alerts<span id="tabAlertsBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
-            <button id="accTab-notices" onclick="setAccountTab('notices')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Notices<span id="tabNoticesBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
-            <button id="accTab-files" onclick="setAccountTab('files')" class="flex-1 py-3 text-[10px] font-extrabold uppercase tracking-wide">Files</button>
+            <button id="accTab-account" onclick="setAccountTab('account')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Account</button>
+            <button id="accTab-security" onclick="setAccountTab('security')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Security</button>
+            <button id="accTab-alerts" onclick="setAccountTab('alerts')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Alerts<span id="tabAlertsBadge" class="hidden ml-1 bg-rose-600 text-white rounded-full px-1.5 text-[10px] font-black">0</span></button>
+            <button id="accTab-files" onclick="setAccountTab('files')" class="flex-1 py-3 text-[11px] font-extrabold uppercase tracking-wide">Files</button>
         </div>
 
         <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -3558,6 +3479,42 @@ Rules:
                         <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Your student number is your login ID, so it can't be changed here.</p>
                     </div>
                     <button id="profileSaveBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Save Changes</button>
+                </form>
+
+                <form id="emailForm" onsubmit="saveEmailSettings(event)" class="space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4" novalidate>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Email notifications</h4>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Get a short email when something new is waiting for you, in case you are not on the site. The email only says to log in. It never shows the details.</p>
+                    <div>
+                        <label for="accEmail" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Your email address</label>
+                        <input id="accEmail" type="email" autocomplete="email" maxlength="120" placeholder="you@example.com"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <label class="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <input id="accEmailNotify" type="checkbox" checked class="w-4 h-4 shrink-0"> Email me when something new arrives
+                    </label>
+                    <p id="emailState" class="text-[11px] text-slate-500 dark:text-slate-400"></p>
+                    <button id="emailSaveBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Save Email Settings</button>
+                </form>
+
+                <form id="mailAdminBox" onsubmit="saveMailSettings(event)" class="hidden space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4" novalidate>
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Email sending (officers only)</h4>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Connect the Google Apps Script email relay so the site can send these emails. Setup steps are in the guide that came with this update.</p>
+                    <div>
+                        <label for="mailUrl" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Web app URL</label>
+                        <input id="mailUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <div>
+                        <label for="mailSecret" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Secret</label>
+                        <input id="mailSecret" type="password" autocomplete="off" placeholder="The same secret you wrote in the script"
+                            class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
+                    </div>
+                    <p id="mailStatus" class="text-[11px] text-slate-500 dark:text-slate-400"></p>
+                    <div class="flex gap-2">
+                        <button id="mailSaveBtn" type="submit" class="flex-1 bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Save</button>
+                        <button type="button" onclick="sendTestMail()" class="px-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold py-2 rounded-lg text-xs transition">Send me a test</button>
+                        <button id="mailRemoveBtn" type="button" onclick="removeMailSettings()" class="hidden px-3 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white font-bold py-2 rounded-lg text-xs transition">Turn off</button>
+                    </div>
                 </form>
 
                 <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
@@ -3602,7 +3559,6 @@ Rules:
                     <button id="annPostBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2 rounded-lg text-xs border border-amber-400/40 shadow transition">Post Announcement</button>
                 </form>
 
-                <div id="noticeAlertCard"></div>
                 <div id="adminAlertCard"></div>
 
                 <div>
@@ -3616,55 +3572,6 @@ Rules:
                 <div>
                     <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Special announcements</h4>
                     <div id="annList" class="space-y-2"></div>
-                </div>
-            </section>
-
-            <!-- NOTICES (private violation notices) -->
-            <section id="accPanel-notices" class="hidden p-5 space-y-5">
-                <div>
-                    <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Violation notices sent to me</h4>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">These are private. Only you, the sender and the Executive / Peace and Order Officers can see them.</p>
-                    <div id="noticeInbox" class="space-y-2"></div>
-                </div>
-
-                <form id="noticeForm" onsubmit="submitNotice(event)" class="hidden bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-3" novalidate>
-                    <div>
-                        <h4 class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Send a violation notice (private)</h4>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Only the student you choose, you and the Executive / Peace and Order Officers can see it.</p>
-                    </div>
-                    <div>
-                        <label for="noticeSearch" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Student</label>
-                        <input id="noticeSearch" type="search" oninput="renderNoticeRecipients()" placeholder="Search name or student number"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none mb-2">
-                        <select id="noticeTo" size="5"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none"></select>
-                    </div>
-                    <div>
-                        <label for="noticeTitle" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Violation</label>
-                        <input id="noticeTitle" type="text" maxlength="120" placeholder="e.g. Improper uniform"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
-                    </div>
-                    <div>
-                        <label for="noticeDate" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Date of incident</label>
-                        <input id="noticeDate" type="date"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
-                    </div>
-                    <div>
-                        <label for="noticeDetails" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Details</label>
-                        <textarea id="noticeDetails" rows="4" maxlength="2000" placeholder="What happened"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none"></textarea>
-                    </div>
-                    <div>
-                        <label for="noticeAction" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Action required (optional)</label>
-                        <input id="noticeAction" type="text" maxlength="500" placeholder="e.g. Report to the Disciplinary Committee office"
-                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-600 outline-none">
-                    </div>
-                    <button id="noticeSendBtn" type="submit" class="w-full bg-[#2E1A47] hover:bg-purple-900 text-[#FFD700] font-extrabold py-2.5 rounded-lg text-sm border border-amber-400/40 shadow transition">Send Notice</button>
-                </form>
-
-                <div id="noticeSentWrap" class="hidden">
-                    <h4 id="noticeSentTitle" class="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notices I sent</h4>
-                    <div id="noticeSent" class="space-y-2"></div>
                 </div>
             </section>
 

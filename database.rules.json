@@ -22,6 +22,14 @@
         "createdAt": {
           ".validate": "newData.isNumber()"
         },
+        "email": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length <= 120 && newData.val().matches(/^[^@ ]+@[^@ ]+\\.[^@ ]+$/)"
+        },
+        "emailNotify": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isBoolean()"
+        },
         "$other": {
           ".validate": false
         }
@@ -76,35 +84,6 @@
         }
       }
     },
-    "violations": {
-      "inbox": {
-        "$uid": {
-          ".read": "auth != null && (auth.uid === $uid || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))",
-          "$id": {
-            ".write": "auth != null && ((((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee') && !data.exists() && newData.child('from').val() === auth.uid && newData.child('to').val() === $uid) || (data.exists() && !newData.exists() && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || data.child('from').val() === auth.uid)))",
-            "ackAt": {
-              ".write": "auth != null && auth.uid === $uid && !data.exists()",
-              ".validate": "newData.isNumber()"
-            },
-            ".validate": "newData.hasChildren(['to', 'toName', 'toSN', 'from', 'fromName', 'title', 'details', 'incidentDate', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 120 && newData.child('details').isString() && newData.child('details').val().length >= 3 && newData.child('details').val().length <= 2000 && (!newData.child('action').exists() || (newData.child('action').isString() && newData.child('action').val().length <= 500)) && newData.child('to').val() === $uid"
-          }
-        }
-      },
-      "sent": {
-        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
-        "$sender": {
-          ".read": "auth != null && auth.uid === $sender",
-          "$id": {
-            ".write": "auth != null && ((auth.uid === $sender && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee') && !data.exists() && newData.child('from').val() === auth.uid) || (data.exists() && !newData.exists() && (auth.uid === $sender || (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer'))))",
-            "ackAt": {
-              ".write": "auth != null && data.parent().child('to').val() === auth.uid && !data.exists()",
-              ".validate": "newData.isNumber()"
-            },
-            ".validate": "newData.hasChildren(['to', 'toName', 'toSN', 'from', 'fromName', 'title', 'details', 'incidentDate', 'createdAt']) && newData.child('title').isString() && newData.child('title').val().length >= 3 && newData.child('title').val().length <= 120 && newData.child('details').isString() && newData.child('details').val().length >= 3 && newData.child('details').val().length <= 2000 && (!newData.child('action').exists() || (newData.child('action').isString() && newData.child('action').val().length <= 500)) && newData.child('from').val() === $sender"
-          }
-        }
-      }
-    },
     "schedule": {
       "$room": {
         ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
@@ -119,6 +98,11 @@
         ".read": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee' || (root.child('users').child(auth.uid).child('role').val() === 'rep1' || root.child('users').child(auth.uid).child('role').val() === 'rep2' || root.child('users').child(auth.uid).child('role').val() === 'rep3' || root.child('users').child(auth.uid).child('role').val() === 'rep4'))",
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
         ".validate": "newData.hasChildren(['key', 'model']) && newData.child('key').isString() && newData.child('key').val().length >= 20 && newData.child('key').val().length <= 300 && newData.child('model').isString() && newData.child('model').val().length >= 3 && newData.child('model').val().length <= 80"
+      },
+      "mail": {
+        ".read": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer') || root.child('users').child(auth.uid).child('role').val() === 'committee')",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'executive' || root.child('users').child(auth.uid).child('role').val() === 'officer')",
+        ".validate": "newData.hasChildren(['url', 'secret']) && newData.child('url').isString() && newData.child('url').val().length <= 300 && newData.child('url').val().matches(/^https:\\/\\/script\\.google\\.com\\/macros\\/s\\/[A-Za-z0-9_-]+\\/exec$/) && newData.child('secret').isString() && newData.child('secret').val().length >= 8 && newData.child('secret').val().length <= 200"
       }
     }
   }
